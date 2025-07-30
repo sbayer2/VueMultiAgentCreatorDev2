@@ -107,6 +107,7 @@
 </template>
 
 <script setup lang="ts">
+import { watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useForm } from '@/composables/useForm'
@@ -123,7 +124,7 @@ import {
 const router = useRouter()
 const authStore = useAuthStore()
 
-const { fields, isValid, isSubmitting, submitError, touchField, handleSubmit } = useForm({
+const { fields, isValid, isSubmitting, submitError, touchField, handleSubmit, validateField } = useForm({
   initialValues: {
     name: '',
     email: '',
@@ -134,14 +135,16 @@ const { fields, isValid, isSubmitting, submitError, touchField, handleSubmit } =
     name: [validationRules.required, validationRules.minLength(2)],
     email: [validationRules.required, validationRules.email],
     password: [validationRules.required, validationRules.password],
-    confirmPassword: [validationRules.required],
+    confirmPassword: [
+      validationRules.required,
+      // Dynamic validation that always checks against current password value
+      (value: string) => {
+        const currentPassword = fields.password.value
+        return value === currentPassword || 'Passwords do not match'
+      }
+    ],
   },
   onSubmit: async (values) => {
-    // Additional validation
-    if (values.password !== values.confirmPassword) {
-      throw new Error('Passwords do not match')
-    }
-
     const result = await authStore.register({
       name: values.name,
       email: values.email,
@@ -155,8 +158,10 @@ const { fields, isValid, isSubmitting, submitError, touchField, handleSubmit } =
   },
 })
 
-// Add custom validation for confirm password
-fields.confirmPassword.rules?.push(
-  validationRules.confirmPassword(fields.password.value)
-)
+// Re-validate confirmPassword when password changes
+watch(() => fields.password.value, () => {
+  if (fields.confirmPassword.touched && fields.confirmPassword.value) {
+    validateField('confirmPassword')
+  }
+})
 </script>
