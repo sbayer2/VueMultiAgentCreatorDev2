@@ -81,6 +81,34 @@ async def health_check():
     """Health check endpoint for Google Cloud Run"""
     return {"status": "healthy"}
 
+@app.get("/test-db")
+async def test_database():
+    """Test database connection"""
+    import os
+    from models.database import engine
+    from sqlalchemy import text
+    try:
+        # Test connection
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT 1"))
+            return {
+                "status": "connected",
+                "db_host": os.getenv("DB_HOST"),
+                "db_user": os.getenv("DB_USER"),
+                "db_pass_exists": bool(os.getenv("DB_PASS")),
+                "db_pass_length": len(os.getenv("DB_PASS", "")),
+                "test_query": "success"
+            }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "db_host": os.getenv("DB_HOST"),
+            "db_user": os.getenv("DB_USER"),
+            "db_pass_exists": bool(os.getenv("DB_PASS")),
+            "db_pass_length": len(os.getenv("DB_PASS", ""))
+        }
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
