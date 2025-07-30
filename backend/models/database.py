@@ -56,12 +56,8 @@ class FileMetadata(Base):
 
 def get_database_url():
     """Get database URL based on environment"""
-    if settings.INSTANCE_CONNECTION_NAME:
-        # Cloud SQL connection
-        return f"mysql+pymysql://{settings.DB_USER}:{settings.DB_PASS}@/{settings.DB_NAME}?unix_socket=/cloudsql/{settings.INSTANCE_CONNECTION_NAME}"
-    else:
-        # Local connection
-        return f"mysql+pymysql://{settings.DB_USER}:{settings.DB_PASS}@{settings.DB_HOST}/{settings.DB_NAME}"
+    # Always use TCP connection with provided host
+    return f"mysql+pymysql://{settings.DB_USER}:{settings.DB_PASS}@{settings.DB_HOST}:3306/{settings.DB_NAME}"
 
 # Create engine
 engine = create_engine(get_database_url(), pool_pre_ping=True)

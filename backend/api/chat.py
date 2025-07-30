@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from openai import OpenAI, AssistantEventHandler
+from openai import OpenAI
 from openai.types.beta.threads import Message
 
 from models.database import get_db, User
@@ -26,17 +26,16 @@ class ChatResponse(BaseModel):
     message_id: str
     content: str
 
-# Event handler for streaming
-class StreamingEventHandler(AssistantEventHandler):
+# Event handler for streaming (simplified for now)
+class StreamingEventHandler:
     def __init__(self, websocket: WebSocket):
-        super().__init__()
         self.websocket = websocket
         self.full_response = ""
     
     async def on_text_created(self, text):
         await self.websocket.send_json({
             "type": "text_created",
-            "content": text.value
+            "content": text if isinstance(text, str) else text.value
         })
     
     async def on_text_delta(self, delta, snapshot):

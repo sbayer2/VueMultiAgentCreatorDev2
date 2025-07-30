@@ -16,6 +16,7 @@ client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
 # Available models
 AVAILABLE_MODELS = [
+    "gpt-4.1-2025-04-14",  # Latest model for assistants
     "gpt-4o",
     "gpt-4o-mini", 
     "gpt-4-turbo",

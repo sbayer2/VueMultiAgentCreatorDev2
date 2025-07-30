@@ -227,7 +227,7 @@ import {
   Bars3Icon,
   XMarkIcon,
   HomeIcon,
-  RobotIcon,
+  SparklesIcon,
   ChatBubbleLeftRightIcon,
   UserIcon,
   ChevronDownIcon,
@@ -242,7 +242,7 @@ const sidebarOpen = ref(false)
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
-  { name: 'Assistants', href: '/dashboard/assistants', icon: RobotIcon },
+  { name: 'Assistants', href: '/dashboard/assistants', icon: SparklesIcon },
   { name: 'Chat', href: '/dashboard/chat', icon: ChatBubbleLeftRightIcon },
   { name: 'Profile', href: '/dashboard/profile', icon: UserIcon },
 ]
