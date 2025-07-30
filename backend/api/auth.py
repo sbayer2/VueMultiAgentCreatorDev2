@@ -76,20 +76,38 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         raise credentials_exception
     return user
 
-@router.post("/register", response_model=Token)
-async def register(user_create: UserCreate, db: Session = Depends(get_db)):
+class RegisterRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+    confirmPassword: str
+
+class AuthResponse(BaseModel):
+    success: bool
+    data: Optional[dict] = None
+    error: Optional[dict] = None
+
+@router.post("/register")
+async def register(register_data: RegisterRequest, db: Session = Depends(get_db)):
     """Register new user"""
+    # Validate passwords match
+    if register_data.password != register_data.confirmPassword:
+        return AuthResponse(
+            success=False, 
+            error={"message": "Passwords do not match"}
+        )
+    
     # Check if user exists
-    db_user = db.query(User).filter(User.username == user_create.username).first()
+    db_user = db.query(User).filter(User.username == register_data.email).first()
     if db_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already registered"
+        return AuthResponse(
+            success=False,
+            error={"message": "Email already registered"}
         )
     
     # Create new user
-    hashed_password = get_password_hash(user_create.password)
-    db_user = User(username=user_create.username, password_hash=hashed_password)
+    hashed_password = get_password_hash(register_data.password)
+    db_user = User(username=register_data.email, password_hash=hashed_password)
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
@@ -99,11 +117,53 @@ async def register(user_create: UserCreate, db: Session = Depends(get_db)):
     access_token = create_access_token(
         data={"sub": db_user.username}, expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    
+    return AuthResponse(
+        success=True,
+        data={
+            "token": access_token,
+            "user": {
+                "id": db_user.id,
+                "email": db_user.username,
+                "name": register_data.name
+            }
+        }
+    )
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+@router.post("/login")
+async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
+    """Login user"""
+    user = db.query(User).filter(User.username == login_data.email).first()
+    if not user or not verify_password(login_data.password, user.password_hash):
+        return AuthResponse(
+            success=False,
+            error={"message": "Invalid email or password"}
+        )
+    
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    
+    return AuthResponse(
+        success=True,
+        data={
+            "token": access_token,
+            "user": {
+                "id": user.id,
+                "email": user.username,
+                "name": user.username.split('@')[0]  # Use email prefix as name
+            }
+        }
+    )
 
 @router.post("/token", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    """Login user"""
+async def token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    """OAuth2 token endpoint for Swagger UI"""
     user = db.query(User).filter(User.username == form_data.username).first()
     if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(
@@ -117,6 +177,11 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
         data={"sub": user.username}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
+
+@router.post("/logout")
+async def logout():
+    """Logout user (client-side token removal)"""
+    return {"success": True, "message": "Logged out successfully"}
 
 @router.get("/me", response_model=UserResponse)
 async def read_users_me(current_user: User = Depends(get_current_user)):
