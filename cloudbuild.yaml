@@ -1,18 +1,18 @@
 steps:
   # Build frontend
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/vue-multiagent-frontend:$COMMIT_SHA', './frontend']
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/vue-multiagent-frontend:latest', './frontend']
   
   # Build backend
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/vue-multiagent-backend:$COMMIT_SHA', './backend']
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/vue-multiagent-backend:latest', './backend']
   
   # Push images
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/vue-multiagent-frontend:$COMMIT_SHA']
+    args: ['push', 'gcr.io/$PROJECT_ID/vue-multiagent-frontend:latest']
   
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/vue-multiagent-backend:$COMMIT_SHA']
+    args: ['push', 'gcr.io/$PROJECT_ID/vue-multiagent-backend:latest']
   
   # Deploy backend to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -22,16 +22,20 @@ steps:
       - 'deploy'
       - 'vue-multiagent-backend'
       - '--image'
-      - 'gcr.io/$PROJECT_ID/vue-multiagent-backend:$COMMIT_SHA'
+      - 'gcr.io/$PROJECT_ID/vue-multiagent-backend:latest'
       - '--region'
       - 'us-central1'
       - '--platform'
       - 'managed'
       - '--allow-unauthenticated'
       - '--set-env-vars'
-      - 'DB_HOST=35.193.26.19,DB_USER=root,DB_PASS=,DB_NAME=multiagent_db,FRONTEND_URL=https://vue-multiagent-frontend-$COMMIT_SHA-uc.a.run.app'
+      - 'DB_HOST=35.193.26.19,DB_USER=root,DB_PASS=,DB_NAME=multiagent_db,FRONTEND_URL=https://vue-multiagent-frontend-j6nsgbqxwq-uc.a.run.app'
       - '--set-secrets'
       - 'OPENAI_API_KEY=openai-api-key:latest,SECRET_KEY=jwt-secret-key:latest'
+      - '--timeout'
+      - '300'
+      - '--memory'
+      - '512Mi'
   
   # Deploy frontend to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -41,16 +45,13 @@ steps:
       - 'deploy'
       - 'vue-multiagent-frontend'
       - '--image'
-      - 'gcr.io/$PROJECT_ID/vue-multiagent-frontend:$COMMIT_SHA'
+      - 'gcr.io/$PROJECT_ID/vue-multiagent-frontend:latest'
       - '--region'
       - 'us-central1'
       - '--platform'
       - 'managed'
       - '--allow-unauthenticated'
 
-substitutions:
-  _CLOUD_SQL_CONNECTION_NAME: 'fluted-protocol-425321:us-central1:ai-assistant-solutions-database-09182024'
-
 images:
-  - 'gcr.io/$PROJECT_ID/vue-multiagent-frontend:$COMMIT_SHA'
-  - 'gcr.io/$PROJECT_ID/vue-multiagent-backend:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/vue-multiagent-frontend:latest'
+  - 'gcr.io/$PROJECT_ID/vue-multiagent-backend:latest'

@@ -59,8 +59,18 @@ def get_database_url():
     # Always use TCP connection with provided host
     return f"mysql+pymysql://{settings.DB_USER}:{settings.DB_PASS}@{settings.DB_HOST}:3306/{settings.DB_NAME}"
 
-# Create engine
-engine = create_engine(get_database_url(), pool_pre_ping=True)
+# Create engine with connection pool settings for Cloud Run
+engine = create_engine(
+    get_database_url(), 
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=10,
+    pool_timeout=30,
+    pool_recycle=1800,
+    connect_args={
+        "connect_timeout": 10
+    }
+)
 
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

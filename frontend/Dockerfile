@@ -24,8 +24,12 @@ COPY --from=build-stage /app/dist /usr/share/nginx/html
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
 
-# Expose port 80
-EXPOSE 80
+# Copy entrypoint script
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Expose port (Cloud Run sets PORT env var)
+EXPOSE 8080
+
+# Start nginx with dynamic port
+CMD ["/docker-entrypoint.sh"]

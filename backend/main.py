@@ -29,7 +29,12 @@ async def lifespan(app: FastAPI):
     """Handle startup and shutdown events"""
     # Startup
     logger.info("Starting up...")
-    init_db()
+    try:
+        init_db()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        logger.warning("Application starting without database - some features may not work")
     yield
     # Shutdown
     logger.info("Shutting down...")
