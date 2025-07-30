@@ -57,6 +57,11 @@ class FileMetadata(Base):
 def get_database_url():
     """Get database URL based on environment"""
     # Always use TCP connection with provided host
+    import logging
+    logger = logging.getLogger(__name__)
+    db_url = f"mysql+pymysql://{settings.DB_USER}:{'*' * len(settings.DB_PASS) if settings.DB_PASS else 'NO_PASS'}@{settings.DB_HOST}:3306/{settings.DB_NAME}"
+    logger.info(f"Database URL (masked): {db_url}")
+    logger.info(f"DB_PASS length: {len(settings.DB_PASS) if settings.DB_PASS else 0}")
     return f"mysql+pymysql://{settings.DB_USER}:{settings.DB_PASS}@{settings.DB_HOST}:3306/{settings.DB_NAME}"
 
 # Create engine with connection pool settings for Cloud Run
