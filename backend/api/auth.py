@@ -198,3 +198,16 @@ async def delete_account(current_user: User = Depends(get_current_user), db: Ses
     db.delete(current_user)
     db.commit()
     return {"message": "Account deleted successfully"}
+
+# Temporary endpoint for testing - remove in production
+@router.delete("/reset-all-users-test-only")
+async def reset_all_users(db: Session = Depends(get_db)):
+    """Delete all users - FOR TESTING ONLY"""
+    try:
+        count = db.query(User).count()
+        db.query(User).delete()
+        db.commit()
+        return {"success": True, "message": f"Deleted {count} users"}
+    except Exception as e:
+        db.rollback()
+        return {"success": False, "error": str(e)}

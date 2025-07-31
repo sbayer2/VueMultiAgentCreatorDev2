@@ -69,10 +69,16 @@ const router = createRouter({
 
 // Navigation guards
 router.beforeEach(async (to, from, next) => {
+  console.log('[ROUTER DEBUG] Navigation:', from.path, '->', to.path)
   const authStore = useAuthStore()
   
+  const tokenInStorage = localStorage.getItem('auth_token')
+  console.log('[ROUTER DEBUG] Token in localStorage:', tokenInStorage ? tokenInStorage.substring(0, 20) + '...' : 'null')
+  console.log('[ROUTER DEBUG] isAuthenticated:', authStore.isAuthenticated)
+  
   // Check authentication status if not already checked
-  if (!authStore.isAuthenticated && localStorage.getItem('auth_token')) {
+  if (!authStore.isAuthenticated && tokenInStorage) {
+    console.log('[ROUTER DEBUG] Calling checkAuth()')
     await authStore.checkAuth()
   }
 
@@ -80,15 +86,18 @@ router.beforeEach(async (to, from, next) => {
   const requiresGuest = to.matched.some(record => record.meta.requiresGuest)
 
   if (requiresAuth && !authStore.isAuthenticated) {
+    console.log('[ROUTER DEBUG] Route requires auth but user not authenticated, redirecting to login')
     // Redirect to login if authentication is required
     next({
       name: 'login',
       query: { redirect: to.fullPath },
     })
   } else if (requiresGuest && authStore.isAuthenticated) {
+    console.log('[ROUTER DEBUG] Route requires guest but user authenticated, redirecting to dashboard')
     // Redirect to dashboard if already authenticated
     next({ name: 'dashboard' })
   } else {
+    console.log('[ROUTER DEBUG] Navigation allowed')
     next()
   }
 })
