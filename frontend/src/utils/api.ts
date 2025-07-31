@@ -45,18 +45,11 @@ export async function apiRequest<T = any>(
   config: AxiosRequestConfig
 ): Promise<ApiResponse<T>> {
   try {
-    console.log('[API DEBUG] Making request with config:', {
-      method: config.method,
-      url: config.url,
-      hasData: !!config.data
-    })
     const response = await api.request<any>(config)
-    console.log('[API DEBUG] Request successful, raw response.data:', response.data)
     
     // The backend returns { success: boolean, data?: any, error?: any }
     // We need to check if this is the backend's response format
     if (response.data && typeof response.data === 'object' && 'success' in response.data) {
-      console.log('[API DEBUG] Backend response format detected')
       return response.data as ApiResponse<T>
     }
     
@@ -66,7 +59,6 @@ export async function apiRequest<T = any>(
       data: response.data as T,
     }
   } catch (error) {
-    console.log('[API DEBUG] Request failed:', error)
     return {
       success: false,
       error: handleApiError(error),
@@ -76,15 +68,11 @@ export async function apiRequest<T = any>(
 
 // Convenience methods
 export const apiClient = {
-  get: <T = any>(url: string, config?: AxiosRequestConfig) => {
-    console.log('[API DEBUG] GET request to:', url)
-    return apiRequest<T>({ ...config, method: 'GET', url })
-  },
+  get: <T = any>(url: string, config?: AxiosRequestConfig) =>
+    apiRequest<T>({ ...config, method: 'GET', url }),
 
-  post: <T = any>(url: string, data?: any, config?: AxiosRequestConfig) => {
-    console.log('[API DEBUG] POST request to:', url)
-    return apiRequest<T>({ ...config, method: 'POST', url, data })
-  },
+  post: <T = any>(url: string, data?: any, config?: AxiosRequestConfig) =>
+    apiRequest<T>({ ...config, method: 'POST', url, data }),
 
   put: <T = any>(url: string, data?: any, config?: AxiosRequestConfig) =>
     apiRequest<T>({ ...config, method: 'PUT', url, data }),

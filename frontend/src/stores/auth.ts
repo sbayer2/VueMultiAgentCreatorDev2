@@ -105,17 +105,13 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const checkAuth = async () => {
-    console.log('[AUTH DEBUG] checkAuth() called')
     const storedToken = localStorage.getItem('auth_token')
-    console.log('[AUTH DEBUG] Token from localStorage in checkAuth:', storedToken ? storedToken.substring(0, 20) + '...' : 'null')
     
     // Check for invalid tokens
     if (!storedToken || storedToken === 'undefined' || storedToken === 'null' || storedToken.trim() === '') {
-      console.log('[AUTH DEBUG] No valid token found, returning false')
       // Clean up invalid tokens
       if (storedToken === 'undefined' || storedToken === 'null') {
         localStorage.removeItem('auth_token')
-        console.log('[AUTH DEBUG] Removed invalid token from localStorage')
       }
       return false
     }
@@ -124,22 +120,17 @@ export const useAuthStore = defineStore('auth', () => {
     isLoading.value = true
 
     try {
-      console.log('[AUTH DEBUG] Making GET /auth/me request')
       const response = await apiClient.get<User>('/auth/me')
-      console.log('[AUTH DEBUG] /auth/me response:', response)
       
       if (response.success && response.data) {
         user.value = response.data
-        console.log('[AUTH DEBUG] checkAuth successful, user set')
         return true
       } else {
-        console.log('[AUTH DEBUG] checkAuth failed, calling logout')
         // Invalid token, clear auth state
         logout()
         return false
       }
-    } catch (error) {
-      console.log('[AUTH DEBUG] checkAuth error, calling logout:', error)
+    } catch {
       logout()
       return false
     } finally {
