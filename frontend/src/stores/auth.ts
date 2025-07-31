@@ -27,13 +27,14 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await apiClient.post<AuthResponse>('/auth/login', credentials)
       
       if (response.success && response.data) {
-        user.value = response.data.user
+        // Set state first
         token.value = response.data.token
+        user.value = response.data.user
         
-        // Store token in localStorage for persistence
+        // Store token in localStorage immediately
         localStorage.setItem('auth_token', response.data.token)
         
-        await router.push('/dashboard')
+        // Return success and let the component handle navigation
         return { success: true }
       } else {
         error.value = response.error?.message || 'Login failed'
@@ -55,12 +56,14 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await apiClient.post<AuthResponse>('/auth/register', data)
       
       if (response.success && response.data) {
-        user.value = response.data.user
+        // Set state first
         token.value = response.data.token
+        user.value = response.data.user
         
+        // Store token in localStorage immediately
         localStorage.setItem('auth_token', response.data.token)
         
-        await router.push('/dashboard')
+        // Return success and let the component handle navigation
         return { success: true }
       } else {
         error.value = response.error?.message || 'Registration failed'
@@ -187,6 +190,6 @@ export const useAuthStore = defineStore('auth', () => {
   }
 }, {
   persist: {
-    paths: ['token'], // Only persist the token
+    paths: ['token', 'user'], // Persist both token and user
   },
 })

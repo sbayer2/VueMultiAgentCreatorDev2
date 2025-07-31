@@ -117,7 +117,10 @@ const { fields, isValid, isSubmitting, submitError, touchField, handleSubmit } =
       password: values.password,
     })
     
-    if (!result.success) {
+    if (result.success) {
+      // Navigate to dashboard after successful login
+      await router.push('/dashboard')
+    } else {
       throw new Error(result.error)
     }
   },

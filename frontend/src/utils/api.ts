@@ -1,48 +1,17 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios'
-import { useAuthStore } from '@/stores/auth'
 import type { ApiResponse, ApiError } from '@/types'
 
 // Create axios instance with default config
 const api: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  baseURL: import.meta.env.VITE_API_URL || '/api',
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
-// Request interceptor to add auth token
-api.interceptors.request.use(
-  (config) => {
-    const authStore = useAuthStore()
-    const token = authStore.token
-
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-
-    return config
-  },
-  (error) => {
-    return Promise.reject(error)
-  }
-)
-
-// Response interceptor to handle errors
-api.interceptors.response.use(
-  (response) => response,
-  async (error: AxiosError<ApiResponse>) => {
-    const authStore = useAuthStore()
-
-    if (error.response?.status === 401) {
-      // Token expired or invalid
-      authStore.logout()
-      window.location.href = '/login'
-    }
-
-    return Promise.reject(error)
-  }
-)
+// Note: Interceptors are set up in main.ts after Pinia initialization
+// to avoid circular dependency issues
 
 // Helper function to handle API errors
 export function handleApiError(error: any): ApiError {

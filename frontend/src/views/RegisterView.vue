@@ -152,7 +152,10 @@ const { fields, isValid, isSubmitting, submitError, touchField, handleSubmit, va
       confirmPassword: values.confirmPassword,
     })
     
-    if (!result.success) {
+    if (result.success) {
+      // Navigate to dashboard after successful registration
+      await router.push('/dashboard')
+    } else {
       throw new Error(result.error)
     }
   },
