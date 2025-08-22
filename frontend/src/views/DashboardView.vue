@@ -93,7 +93,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useAssistantsStore } from '@/stores/assistants'
-import { useChatStore } from '@/stores/chat'
+import { useConversationsStore } from '@/stores/conversations'
 import { formatDate } from '@/utils/formatters'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { 
@@ -106,7 +106,7 @@ import {
 
 const authStore = useAuthStore()
 const assistantsStore = useAssistantsStore()
-const chatStore = useChatStore()
+const conversationsStore = useConversationsStore()
 
 const isLoading = ref(true)
 const recentActivity = ref<any[]>([])
@@ -120,7 +120,7 @@ const stats = computed(() => [
   },
   {
     name: 'Active Chats',
-    value: chatStore.sessionsList.length,
+    value: conversationsStore.conversationsCount,
     change: '+5%',
     changeType: 'increase',
   },
@@ -164,7 +164,7 @@ onMounted(async () => {
     // Fetch initial data
     await Promise.all([
       assistantsStore.fetchAssistants(),
-      chatStore.fetchSessions(),
+      conversationsStore.fetchConversations(),
     ])
     
     // Simulate fetching recent activity

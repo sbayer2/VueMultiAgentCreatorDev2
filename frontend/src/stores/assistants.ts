@@ -14,23 +14,24 @@ export const useAssistantsStore = defineStore('assistants', () => {
   // Getters
   const assistantsList = computed(() => assistants.value)
   const assistantsCount = computed(() => assistants.value.length)
-  const getAssistantById = computed(() => (id: string) => 
+  const getAssistantById = computed(() => (id: number) => 
     assistants.value.find(a => a.id === id)
+  )
+  const getAssistantByAssistantId = computed(() => (assistant_id: string) => 
+    assistants.value.find(a => a.assistant_id === assistant_id)
   )
 
   // Actions
-  const fetchAssistants = async (page = 1, limit = 20) => {
+  const fetchAssistants = async () => {
     isLoading.value = true
     error.value = null
 
     try {
-      const response = await apiClient.get<PaginatedResponse<Assistant>>('/assistants', {
-        params: { page, limit }
-      })
+      const response = await apiClient.get<Assistant[]>('/assistants/')
       
       if (response.success && response.data) {
-        assistants.value = response.data.items
-        totalCount.value = response.data.total
+        assistants.value = response.data
+        totalCount.value = response.data.length
         return { success: true, data: response.data }
       } else {
         error.value = response.error?.message || 'Failed to fetch assistants'
@@ -44,18 +45,18 @@ export const useAssistantsStore = defineStore('assistants', () => {
     }
   }
 
-  const fetchAssistant = async (id: string) => {
+  const fetchAssistant = async (assistant_id: string) => {
     isLoading.value = true
     error.value = null
 
     try {
-      const response = await apiClient.get<Assistant>(`/assistants/${id}`)
+      const response = await apiClient.get<Assistant>(`/assistants/${assistant_id}`)
       
       if (response.success && response.data) {
         currentAssistant.value = response.data
         
         // Update in list if exists
-        const index = assistants.value.findIndex(a => a.id === id)
+        const index = assistants.value.findIndex(a => a.assistant_id === assistant_id)
         if (index !== -1) {
           assistants.value[index] = response.data
         }
@@ -78,7 +79,7 @@ export const useAssistantsStore = defineStore('assistants', () => {
     error.value = null
 
     try {
-      const response = await apiClient.post<Assistant>('/assistants', data)
+      const response = await apiClient.post<Assistant>('/assistants/', data)
       
       if (response.success && response.data) {
         assistants.value.unshift(response.data)
@@ -95,22 +96,22 @@ export const useAssistantsStore = defineStore('assistants', () => {
     }
   }
 
-  const updateAssistant = async (id: string, updates: Partial<CreateAssistantData>) => {
+  const updateAssistant = async (assistant_id: string, updates: Partial<CreateAssistantData>) => {
     isLoading.value = true
     error.value = null
 
     try {
-      const response = await apiClient.patch<Assistant>(`/assistants/${id}`, updates)
+      const response = await apiClient.put<Assistant>(`/assistants/${assistant_id}`, updates)
       
       if (response.success && response.data) {
         // Update in list
-        const index = assistants.value.findIndex(a => a.id === id)
+        const index = assistants.value.findIndex(a => a.assistant_id === assistant_id)
         if (index !== -1) {
           assistants.value[index] = response.data
         }
         
         // Update current if it's the same
-        if (currentAssistant.value?.id === id) {
+        if (currentAssistant.value?.assistant_id === assistant_id) {
           currentAssistant.value = response.data
         }
         
@@ -127,19 +128,19 @@ export const useAssistantsStore = defineStore('assistants', () => {
     }
   }
 
-  const deleteAssistant = async (id: string) => {
+  const deleteAssistant = async (assistant_id: string) => {
     isLoading.value = true
     error.value = null
 
     try {
-      const response = await apiClient.delete(`/assistants/${id}`)
+      const response = await apiClient.delete(`/assistants/${assistant_id}`)
       
       if (response.success) {
         // Remove from list
-        assistants.value = assistants.value.filter(a => a.id !== id)
+        assistants.value = assistants.value.filter(a => a.assistant_id !== assistant_id)
         
         // Clear current if it's the same
-        if (currentAssistant.value?.id === id) {
+        if (currentAssistant.value?.assistant_id === assistant_id) {
           currentAssistant.value = null
         }
         
@@ -156,87 +157,16 @@ export const useAssistantsStore = defineStore('assistants', () => {
     }
   }
 
-  const uploadFile = async (assistantId: string, file: File, onProgress?: (progress: number) => void) => {
-    isLoading.value = true
+  const clearError = () => {
     error.value = null
-
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-
-      const response = await apiClient.post<Assistant>(
-        `/assistants/${assistantId}/files`,
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-          onUploadProgress: (progressEvent) => {
-            if (progressEvent.total && onProgress) {
-              const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total)
-              onProgress(progress)
-            }
-          },
-        }
-      )
-      
-      if (response.success && response.data) {
-        // Update assistant in list
-        const index = assistants.value.findIndex(a => a.id === assistantId)
-        if (index !== -1) {
-          assistants.value[index] = response.data
-        }
-        
-        // Update current if it's the same
-        if (currentAssistant.value?.id === assistantId) {
-          currentAssistant.value = response.data
-        }
-        
-        return { success: true, data: response.data }
-      } else {
-        error.value = response.error?.message || 'Failed to upload file'
-        return { success: false, error: error.value }
-      }
-    } catch (err) {
-      error.value = 'An unexpected error occurred'
-      return { success: false, error: error.value }
-    } finally {
-      isLoading.value = false
-    }
   }
 
-  const deleteFile = async (assistantId: string, fileId: string) => {
-    isLoading.value = true
+  const resetState = () => {
+    assistants.value = []
+    currentAssistant.value = null
+    isLoading.value = false
     error.value = null
-
-    try {
-      const response = await apiClient.delete<Assistant>(
-        `/assistants/${assistantId}/files/${fileId}`
-      )
-      
-      if (response.success && response.data) {
-        // Update assistant in list
-        const index = assistants.value.findIndex(a => a.id === assistantId)
-        if (index !== -1) {
-          assistants.value[index] = response.data
-        }
-        
-        // Update current if it's the same
-        if (currentAssistant.value?.id === assistantId) {
-          currentAssistant.value = response.data
-        }
-        
-        return { success: true, data: response.data }
-      } else {
-        error.value = response.error?.message || 'Failed to delete file'
-        return { success: false, error: error.value }
-      }
-    } catch (err) {
-      error.value = 'An unexpected error occurred'
-      return { success: false, error: error.value }
-    } finally {
-      isLoading.value = false
-    }
+    totalCount.value = 0
   }
 
   return {
@@ -251,6 +181,7 @@ export const useAssistantsStore = defineStore('assistants', () => {
     assistantsList,
     assistantsCount,
     getAssistantById,
+    getAssistantByAssistantId,
     
     // Actions
     fetchAssistants,
@@ -258,7 +189,7 @@ export const useAssistantsStore = defineStore('assistants', () => {
     createAssistant,
     updateAssistant,
     deleteAssistant,
-    uploadFile,
-    deleteFile,
+    clearError,
+    resetState,
   }
 })

@@ -17,6 +17,7 @@ client = OpenAI(api_key=settings.OPENAI_API_KEY)
 # Available models
 AVAILABLE_MODELS = [
     "gpt-4.1-2025-04-14",  # Latest model for assistants
+    "gpt-4.1-mini-2025-04-01",  # Latest mini model
     "gpt-4o",
     "gpt-4o-mini", 
     "gpt-4-turbo",
@@ -47,6 +48,7 @@ class AssistantResponse(BaseModel):
     instructions: Optional[str]
     model: str
     file_ids: List[str]
+    tools: dict = {"web_search": False, "file_search": False, "code_interpreter": True, "computer_use": False}
 
 @router.get("/models")
 async def get_available_models():
@@ -71,7 +73,8 @@ async def list_assistants(
             description=a.description,
             instructions=a.instructions,
             model=a.model,
-            file_ids=json.loads(a.file_ids) if a.file_ids else []
+            file_ids=json.loads(a.file_ids) if a.file_ids else [],
+            tools={"web_search": False, "file_search": False, "code_interpreter": True, "computer_use": False}
         )
         for a in assistants
     ]
@@ -84,26 +87,31 @@ async def create_assistant(
 ):
     """Create new assistant"""
     try:
-        # Create OpenAI assistant
-        tools = [{"type": "file_search"}]
-        if assistant_data.file_ids:
-            tools.append({"type": "code_interpreter"})
+        # Create OpenAI assistant with proper tools (MMACTEMP pattern)
+        tools = [{"type": "code_interpreter"}]  # Primary tool for file handling
         
-        openai_assistant = client.beta.assistants.create(
-            name=assistant_data.name,
-            instructions=assistant_data.instructions,
-            model=assistant_data.model,
-            tools=tools
-        )
+        # Deduplicate file IDs like MMACTEMP
+        unique_file_ids = list(set(assistant_data.file_ids)) if assistant_data.file_ids else []
         
-        # Update with file IDs if provided
-        if assistant_data.file_ids:
-            openai_assistant = client.beta.assistants.update(
-                openai_assistant.id,
+        # Create with tool_resources if files provided
+        if unique_file_ids:
+            openai_assistant = client.beta.assistants.create(
+                name=assistant_data.name,
+                instructions=assistant_data.instructions,
+                model=assistant_data.model,
+                tools=tools,
                 tool_resources={
-                    "file_search": {"file_ids": assistant_data.file_ids},
-                    "code_interpreter": {"file_ids": assistant_data.file_ids}
+                    "code_interpreter": {
+                        "file_ids": unique_file_ids
+                    }
                 }
+            )
+        else:
+            openai_assistant = client.beta.assistants.create(
+                name=assistant_data.name,
+                instructions=assistant_data.instructions,
+                model=assistant_data.model,
+                tools=tools
             )
         
         # Save to database
@@ -127,7 +135,8 @@ async def create_assistant(
             description=db_assistant.description,
             instructions=db_assistant.instructions,
             model=db_assistant.model,
-            file_ids=assistant_data.file_ids
+            file_ids=assistant_data.file_ids,
+            tools={"web_search": False, "file_search": False, "code_interpreter": True, "computer_use": False}
         )
         
     except Exception as e:
@@ -174,21 +183,32 @@ async def update_assistant(
         if update_data:
             client.beta.assistants.update(assistant_id, **update_data)
         
-        # Update file IDs
+        # Update file IDs using MMACTEMP pattern
         if assistant_update.file_ids is not None:
-            tools = [{"type": "file_search"}]
-            if assistant_update.file_ids:
-                tools.append({"type": "code_interpreter"})
+            # Deduplicate file IDs like MMACTEMP
+            unique_file_ids = list(set(assistant_update.file_ids)) if assistant_update.file_ids else []
+            tools = [{"type": "code_interpreter"}]  # Primary tool for files
             
-            client.beta.assistants.update(
-                assistant_id,
-                tools=tools,
-                tool_resources={
-                    "file_search": {"file_ids": assistant_update.file_ids},
-                    "code_interpreter": {"file_ids": assistant_update.file_ids}
-                } if assistant_update.file_ids else {}
-            )
-            db_assistant.file_ids = json.dumps(assistant_update.file_ids)
+            # Update assistant with tool_resources (MMACTEMP pattern)
+            if unique_file_ids:
+                client.beta.assistants.update(
+                    assistant_id,
+                    tools=tools,
+                    tool_resources={
+                        "code_interpreter": {
+                            "file_ids": unique_file_ids
+                        }
+                    }
+                )
+            else:
+                # Clear tool_resources if no files
+                client.beta.assistants.update(
+                    assistant_id,
+                    tools=tools,
+                    tool_resources={}
+                )
+            
+            db_assistant.file_ids = json.dumps(unique_file_ids)
         
         db.commit()
         db.refresh(db_assistant)
@@ -200,7 +220,8 @@ async def update_assistant(
             description=db_assistant.description,
             instructions=db_assistant.instructions,
             model=db_assistant.model,
-            file_ids=json.loads(db_assistant.file_ids) if db_assistant.file_ids else []
+            file_ids=json.loads(db_assistant.file_ids) if db_assistant.file_ids else [],
+            tools={"web_search": False, "file_search": False, "code_interpreter": True, "computer_use": False}
         )
         
     except Exception as e:

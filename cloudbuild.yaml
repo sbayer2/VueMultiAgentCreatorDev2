@@ -29,7 +29,7 @@ steps:
       - 'managed'
       - '--allow-unauthenticated'
       - '--set-env-vars'
-      - 'DB_HOST=34.45.198.154,DB_USER=root,DB_NAME=multiagent_db,FRONTEND_URL=https://vue-multiagent-frontend-3z6nrfedzq-uc.a.run.app'
+      - 'DB_HOST=34.45.198.154,DB_USER=root,DB_NAME=vue_app,FRONTEND_URL=https://vue-multiagent-frontend-129438231958.us-central1.run.app'
       - '--set-secrets'
       - 'OPENAI_API_KEY=openai-api-key:latest,SECRET_KEY=jwt-secret-key:latest,DB_PASS=db-password:latest'
       - '--timeout'

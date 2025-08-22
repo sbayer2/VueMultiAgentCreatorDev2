@@ -22,42 +22,48 @@
           {{ message.role === 'user' ? 'You' : 'Assistant' }}
         </span>
         <time 
-          :datetime="message.timestamp" 
+          :datetime="message.created_at" 
           :class="[
             'text-xs',
             message.role === 'user' ? 'text-indigo-200' : 'text-gray-400'
           ]"
         >
-          {{ formatTime(message.timestamp) }}
+          {{ formatTime(message.created_at) }}
         </time>
       </div>
 
       <!-- Message Content -->
-      <div class="prose prose-sm max-w-none">
-        <div v-if="isStreaming && streamingContent" class="message-content">
-          <span v-html="renderContent(streamingContent)"></span>
-          <span class="inline-block w-1 h-4 bg-current animate-pulse ml-1"></span>
+      <div class="space-y-2">
+        <!-- Image Attachments -->
+        <div v-if="message.attachments && message.attachments.length > 0" class="mb-2">
+          <ImageDisplay :images="message.attachments" :maxWidth="300" :maxHeight="200" />
         </div>
-        <div v-else class="message-content" v-html="renderContent(message.content)"></div>
+        
+        <!-- Text Content -->
+        <div v-if="message.content" class="prose prose-sm max-w-none">
+          <div v-if="isStreaming && streamingContent" class="message-content">
+            <span v-html="renderContent(streamingContent)"></span>
+            <span class="inline-block w-1 h-4 bg-current animate-pulse ml-1"></span>
+          </div>
+          <div v-else class="message-content" v-html="renderContent(message.content)"></div>
+        </div>
       </div>
 
-      <!-- File Attachments -->
-      <div v-if="message.metadata?.files && message.metadata.files.length > 0" class="mt-2 space-y-1">
+      <!-- Tool Calls Display -->
+      <div v-if="message.tool_calls && message.tool_calls.length > 0" class="mt-2 space-y-1">
         <div 
-          v-for="file in message.metadata.files" 
-          :key="file.id"
+          v-for="toolCall in message.tool_calls" 
+          :key="toolCall.id"
           :class="[
             'inline-flex items-center space-x-1 px-2 py-1 rounded text-xs',
-            message.role === 'user' 
-              ? 'bg-indigo-700 text-indigo-200' 
-              : 'bg-gray-200 text-gray-600'
+            'bg-blue-100 text-blue-800 border border-blue-200'
           ]"
         >
           <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
           </svg>
-          <span>{{ file.name }}</span>
-          <span v-if="file.size" class="opacity-75">({{ formatFileSize(file.size) }})</span>
+          <span>{{ toolCall.function?.name || toolCall.type }}</span>
         </div>
       </div>
 
@@ -75,14 +81,15 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { Message } from '@/types'
+import type { ConversationMessage } from '@/types'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
+import ImageDisplay from './ImageDisplay.vue'
 
 // Props
 const props = defineProps<{
-  message: Message
+  message: ConversationMessage
   isStreaming?: boolean
   streamingContent?: string
 }>()

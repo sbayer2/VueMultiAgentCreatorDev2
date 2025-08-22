@@ -202,12 +202,23 @@ async def delete_account(current_user: User = Depends(get_current_user), db: Ses
 # Temporary endpoint for testing - remove in production
 @router.delete("/reset-all-users-test-only")
 async def reset_all_users(db: Session = Depends(get_db)):
-    """Delete all users - FOR TESTING ONLY"""
+    """Delete all users and related data - FOR TESTING ONLY"""
     try:
-        count = db.query(User).count()
+        from models.database import UserAssistant, Assistant, Conversation, ConversationMessage, FileMetadata
+        
+        # Get count before deletion
+        user_count = db.query(User).count()
+        
+        # Delete in order to respect foreign key constraints
+        db.query(ConversationMessage).delete()
+        db.query(Conversation).delete() 
+        db.query(FileMetadata).delete()
+        db.query(Assistant).delete()
+        db.query(UserAssistant).delete()
         db.query(User).delete()
+        
         db.commit()
-        return {"success": True, "message": f"Deleted {count} users"}
+        return {"success": True, "message": f"Deleted {user_count} users and all related data"}
     except Exception as e:
         db.rollback()
         return {"success": False, "error": str(e)}

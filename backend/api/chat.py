@@ -1,14 +1,14 @@
 """Chat endpoints with WebSocket support"""
 import json
 import asyncio
-from typing import Optional
+from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from openai import OpenAI
 from openai.types.beta.threads import Message
 
-from models.database import get_db, User
+from models.database import get_db, User, UserAssistant
 from api.auth import get_current_user
 from utils.config import settings
 from utils.websocket import ConnectionManager
@@ -20,17 +20,23 @@ manager = ConnectionManager()
 class ChatMessage(BaseModel):
     content: str
     assistant_id: str
-    file_ids: Optional[list[str]] = []
+    file_ids: Optional[List[str]] = None
+
+class ImageAttachment(BaseModel):
+    file_id: str
+    type: str = "image"
 
 class ChatResponse(BaseModel):
     message_id: str
     content: str
+    attachments: Optional[List[ImageAttachment]] = None
 
-# Event handler for streaming (simplified for now)
+# Event handler for streaming with image detection (MMACTEMP pattern)
 class StreamingEventHandler:
-    def __init__(self, websocket: WebSocket):
+    def __init__(self, websocket: WebSocket, thread_id: str):
         self.websocket = websocket
         self.full_response = ""
+        self.thread_id = thread_id
     
     async def on_text_created(self, text):
         await self.websocket.send_json({
@@ -65,6 +71,31 @@ class StreamingEventHandler:
                             "type": "code_output",
                             "content": output.logs
                         })
+    
+    async def check_for_image_outputs(self):
+        """Check for image outputs in thread messages (MMACTEMP pattern)"""
+        try:
+            messages = client.beta.threads.messages.list(thread_id=self.thread_id)
+            image_files = []
+            
+            for message in messages.data:
+                for content in message.content:
+                    if hasattr(content, 'type') and content.type == 'image_file':
+                        file_id = content.image_file.file_id
+                        image_files.append({
+                            "file_id": file_id,
+                            "type": "image_file"
+                        })
+            
+            if image_files:
+                await self.websocket.send_json({
+                    "type": "image_output",
+                    "images": image_files
+                })
+                
+        except Exception as e:
+            print(f"Error checking for image outputs: {e}")
+            # Don't fail the whole stream for image check errors
 
 @router.post("/message", response_model=ChatResponse)
 async def send_message(
@@ -72,25 +103,48 @@ async def send_message(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Send message to assistant (non-streaming)"""
-    if not current_user.thread_id:
+    """Send message to assistant (non-streaming) - MMACTEMP Pattern"""
+    # Get assistant-specific thread ID
+    db_assistant = db.query(UserAssistant).filter(
+        UserAssistant.assistant_id == message.assistant_id,
+        UserAssistant.user_id == current_user.id
+    ).first()
+    
+    if not db_assistant:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No active thread. Please create a thread first."
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Assistant not found"
         )
     
+    # Create assistant-specific thread if it doesn't exist
+    if not db_assistant.thread_id:
+        thread = client.beta.threads.create()
+        db_assistant.thread_id = thread.id
+        db.add(db_assistant)
+        db.commit()
+    
+    thread_id = db_assistant.thread_id
+    
     try:
-        # Add message to thread
+        # Build message content array like MMACTEMP (lines 493-530)
+        message_content = [{"type": "text", "text": message.content}]
+        
+        # Add image files to message content if any (MMACTEMP pattern)
+        if message.file_ids:
+            for file_id in message.file_ids:
+                # For now, assume they're vision files - could be enhanced to check file type
+                message_content.append({"type": "image_file", "image_file": {"file_id": file_id}})
+        
+        # Create message using MMACTEMP pattern
         thread_message = client.beta.threads.messages.create(
-            thread_id=current_user.thread_id,
+            thread_id=thread_id,
             role="user",
-            content=message.content,
-            file_ids=message.file_ids if message.file_ids else None
+            content=message_content  # Use content array like MMACTEMP
         )
         
-        # Run assistant
+        # Create run using simple pattern from MMACTEMP  
         run = client.beta.threads.runs.create(
-            thread_id=current_user.thread_id,
+            thread_id=thread_id,
             assistant_id=message.assistant_id
         )
         
@@ -98,23 +152,39 @@ async def send_message(
         while run.status in ["queued", "in_progress"]:
             await asyncio.sleep(1)
             run = client.beta.threads.runs.retrieve(
-                thread_id=current_user.thread_id,
+                thread_id=thread_id,
                 run_id=run.id
             )
         
         if run.status == "completed":
             # Get messages
             messages = client.beta.threads.messages.list(
-                thread_id=current_user.thread_id,
+                thread_id=thread_id,
                 limit=1
             )
             
             if messages.data:
                 last_message = messages.data[0]
-                content = last_message.content[0].text.value if last_message.content else ""
+                
+                # Extract all content types like MMACTEMP pattern
+                content_parts = []
+                image_attachments = []
+                
+                for content in last_message.content:
+                    if content.type == 'text':
+                        content_parts.append(content.text.value)
+                    elif content.type == 'image_file':
+                        image_attachments.append(ImageAttachment(
+                            file_id=content.image_file.file_id,
+                            type="image"
+                        ))
+                
+                text_content = '\n'.join(content_parts) if content_parts else ""
+                
                 return ChatResponse(
                     message_id=last_message.id,
-                    content=content
+                    content=text_content,
+                    attachments=image_attachments if image_attachments else None
                 )
         
         raise HTTPException(
@@ -126,6 +196,48 @@ async def send_message(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Failed to send message: {str(e)}"
+        )
+
+class NewThreadRequest(BaseModel):
+    assistant_id: str
+
+@router.post("/new-thread")
+async def create_new_thread(
+    request: NewThreadRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new thread for specific assistant (start fresh conversation)"""
+    try:
+        # Get assistant
+        db_assistant = db.query(UserAssistant).filter(
+            UserAssistant.assistant_id == request.assistant_id,
+            UserAssistant.user_id == current_user.id
+        ).first()
+        
+        if not db_assistant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Assistant not found"
+            )
+        
+        # Create new thread for this assistant
+        thread = client.beta.threads.create()
+        db_assistant.thread_id = thread.id
+        db.add(db_assistant)
+        db.commit()
+        
+        return {
+            "success": True,
+            "thread_id": thread.id,
+            "assistant_id": request.assistant_id,
+            "message": "New thread created successfully for assistant"
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to create new thread: {str(e)}"
         )
 
 @router.websocket("/ws/{token}")
@@ -155,7 +267,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
         await websocket.send_json({
             "type": "connection",
             "status": "connected",
-            "thread_id": user.thread_id
+            "message": "Connected to chat WebSocket"
         })
         
         # Listen for messages
@@ -163,30 +275,56 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
             data = await websocket.receive_json()
             
             if data["type"] == "message":
-                # Create thread if needed
-                if not user.thread_id:
+                # Get assistant-specific thread
+                db_assistant = db.query(UserAssistant).filter(
+                    UserAssistant.assistant_id == data["assistant_id"],
+                    UserAssistant.user_id == user.id
+                ).first()
+                
+                if not db_assistant:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "Assistant not found"
+                    })
+                    continue
+                
+                # Create assistant-specific thread if needed
+                if not db_assistant.thread_id:
                     thread = client.beta.threads.create()
-                    user.thread_id = thread.id
+                    db_assistant.thread_id = thread.id
                     db.commit()
                 
-                # Add message to thread
+                thread_id = db_assistant.thread_id
+                
+                # Build message content array like MMACTEMP (lines 493-530)
+                message_content = [{"type": "text", "text": data["content"]}]
+                
+                # Add image files to message content if any (MMACTEMP pattern)
+                if data.get("file_ids"):
+                    for file_id in data["file_ids"]:
+                        # For now, assume they're vision files - could be enhanced to check file type
+                        message_content.append({"type": "image_file", "image_file": {"file_id": file_id}})
+                
+                # Add message to thread using MMACTEMP pattern
                 message = client.beta.threads.messages.create(
-                    thread_id=user.thread_id,
+                    thread_id=thread_id,
                     role="user",
-                    content=data["content"],
-                    file_ids=data.get("file_ids", [])
+                    content=message_content  # Use content array like MMACTEMP
                 )
                 
-                # Create event handler
-                handler = StreamingEventHandler(websocket)
+                # Create event handler with thread ID
+                handler = StreamingEventHandler(websocket, thread_id)
                 
-                # Stream the response
+                # Stream the response using MMACTEMP pattern (simplified)
                 with client.beta.threads.runs.stream(
-                    thread_id=user.thread_id,
+                    thread_id=thread_id,
                     assistant_id=data["assistant_id"],
                     event_handler=handler,
                 ) as stream:
                     stream.until_done()
+                
+                # Check for image outputs (MMACTEMP pattern)
+                await handler.check_for_image_outputs()
                 
                 # Send completion message
                 await websocket.send_json({

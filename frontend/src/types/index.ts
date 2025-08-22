@@ -24,8 +24,35 @@ export interface AuthResponse {
   token: string
 }
 
-// Assistant types
+// Primary Assistant types (Assistants API)
 export interface Assistant {
+  id: number
+  assistant_id: string
+  name: string
+  description?: string
+  instructions: string
+  model: string
+  file_ids: string[]
+}
+
+export interface CreateAssistantData {
+  name: string
+  description?: string
+  instructions: string
+  model: string
+  file_ids?: string[]
+}
+
+export interface UpdateAssistantData {
+  name?: string
+  description?: string
+  instructions?: string
+  model?: string
+  file_ids?: string[]
+}
+
+// Legacy Assistant types (for migration)
+export interface LegacyAssistant {
   id: string
   name: string
   description: string
@@ -50,25 +77,77 @@ export interface AssistantFile {
   uploadedAt: string
 }
 
-export interface CreateAssistantData {
+// Model and Tool information
+export interface AvailableModel {
+  id: string
   name: string
-  description: string
-  model: string
-  systemPrompt: string
-  temperature?: number
-  maxTokens?: number
-  topP?: number
-  frequencyPenalty?: number
-  presencePenalty?: number
+  description?: string
 }
 
-// Chat types
-export interface ChatSession {
+export interface AvailableTool {
+  name: string
+  description: string
+  pricing: string
+}
+
+// Modern Chat types (Responses API)
+export interface Conversation {
+  id: number
+  assistant_id: number
+  title?: string
+  message_count: number
+  created_at: string
+  updated_at?: string
+  thread_id?: string // Thread ID for backend integration
+}
+
+export interface ConversationMessage {
+  id: number
+  role: 'user' | 'assistant' | 'system'
+  content: string | MessageContent[]
+  tool_calls?: ToolCall[]
+  tokens_used?: number
+  created_at: string
+  attachments?: ImageAttachment[]
+}
+
+export interface ToolCall {
+  id: string
+  type: string
+  function?: {
+    name: string
+    arguments: string
+  }
+}
+
+export interface ChatResponse {
+  message_id: number
+  conversation_id: number
+  content: string
+  tool_calls?: ToolCall[]
+  tokens_used?: number
+  response_id?: string
+}
+
+export interface CreateConversationData {
+  assistant_id: number
+  title?: string
+}
+
+export interface SendMessageData {
+  content: string | MessageContent[]
+  assistant_id: number
+  conversation_id?: number
+  attachments?: ImageAttachment[]
+}
+
+// Legacy Chat types (for migration)
+export interface LegacyChatSession {
   id: string
   assistantId: string
   userId: string
   title: string
-  messages: Message[]
+  messages: LegacyMessage[]
   createdAt: string
   updatedAt: string
 }
@@ -81,7 +160,45 @@ export interface MessageFile {
   url?: string
 }
 
-export interface Message {
+// Image attachment types
+export interface ImageAttachment {
+  id: string
+  file_id: string
+  name: string
+  size: number
+  type: string
+  url?: string
+  preview_url?: string
+  width?: number
+  height?: number
+  uploaded_at: string
+}
+
+export interface ImageUploadStatus {
+  id: string
+  file: File
+  progress: number
+  status: 'pending' | 'uploading' | 'processing' | 'completed' | 'error'
+  error?: string
+  result?: ImageAttachment
+}
+
+// Content types for multi-modal messages
+export interface TextContent {
+  type: 'text'
+  text: string
+}
+
+export interface ImageContent {
+  type: 'image_file'
+  image_file: {
+    file_id: string
+  }
+}
+
+export type MessageContent = TextContent | ImageContent
+
+export interface LegacyMessage {
   id: string
   role: 'user' | 'assistant' | 'system'
   content: string
@@ -90,11 +207,6 @@ export interface Message {
     files?: MessageFile[]
     [key: string]: any
   }
-}
-
-export interface SendMessageData {
-  sessionId: string
-  content: string
 }
 
 // API Response types
@@ -134,33 +246,70 @@ export interface FileUploadProgress {
   error?: string
 }
 
-// WebSocket types for chat streaming
-export interface StreamMessageStart {
+// WebSocket types for chat streaming (Responses API)
+export interface StreamConnectionMessage {
+  type: 'connection'
+  status: 'connected'
+  conversation_id: number
+  message_count: number
+}
+
+export interface StreamTextDelta {
+  type: 'text_delta'
+  content: string
+}
+
+export interface StreamCompleteMessage {
+  type: 'complete'
+  content: string
+  response_id?: string
+}
+
+export interface StreamErrorMessage {
+  type: 'error'
+  message: string
+}
+
+export interface StreamToolMessage {
+  type: 'tool_call_start' | 'tool_call_delta' | 'tool_call_complete'
+  tool_name?: string
+  content?: string
+}
+
+export type StreamMessage = 
+  | StreamConnectionMessage 
+  | StreamTextDelta 
+  | StreamCompleteMessage 
+  | StreamErrorMessage 
+  | StreamToolMessage
+
+// Legacy WebSocket types (for migration)
+export interface LegacyStreamMessageStart {
   type: 'start'
   messageId: string
   sessionId: string
 }
 
-export interface StreamMessageToken {
+export interface LegacyStreamMessageToken {
   type: 'token'
   content: string
   messageId: string
 }
 
-export interface StreamMessageEnd {
+export interface LegacyStreamMessageEnd {
   type: 'end'
   messageId: string
   fullContent: string
 }
 
-export interface StreamMessageError {
+export interface LegacyStreamMessageError {
   type: 'error'
   error: string
   messageId?: string
 }
 
-export type StreamMessage = 
-  | StreamMessageStart 
-  | StreamMessageToken 
-  | StreamMessageEnd 
-  | StreamMessageError
+export type LegacyStreamMessage = 
+  | LegacyStreamMessageStart 
+  | LegacyStreamMessageToken 
+  | LegacyStreamMessageEnd 
+  | LegacyStreamMessageError

@@ -20,8 +20,65 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
-    assistants = relationship("UserAssistant", back_populates="user", cascade="all, delete-orphan")
+    assistants = relationship("Assistant", back_populates="user", cascade="all, delete-orphan")
+    legacy_assistants = relationship("UserAssistant", back_populates="user", cascade="all, delete-orphan")
+    conversations = relationship("Conversation", cascade="all, delete-orphan")
 
+class Assistant(Base):
+    """Modern assistant configuration for Responses API"""
+    __tablename__ = "assistants"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    instructions = Column(Text, nullable=False)
+    model = Column(String(50), default="gpt-4o-mini")
+    tools_config = Column(Text, nullable=True)  # JSON string for built-in tools
+    vector_store_ids = Column(Text, nullable=True)  # JSON array for file search
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    user = relationship("User", back_populates="assistants")
+    conversations = relationship("Conversation", back_populates="assistant", cascade="all, delete-orphan")
+
+class Conversation(Base):
+    """Conversation sessions using Responses API"""
+    __tablename__ = "conversations"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    assistant_id = Column(Integer, ForeignKey("assistants.id"), nullable=False)
+    title = Column(String(255), nullable=True)
+    last_response_id = Column(String(255), nullable=True)  # For conversation continuity
+    message_count = Column(Integer, default=0)  # Track conversation length for cost management
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    user = relationship("User")
+    assistant = relationship("Assistant", back_populates="conversations")
+    messages = relationship("ConversationMessage", back_populates="conversation", cascade="all, delete-orphan")
+
+class ConversationMessage(Base):
+    """Individual messages in conversations"""
+    __tablename__ = "conversation_messages"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False)
+    response_id = Column(String(255), nullable=True, index=True)  # OpenAI response ID
+    role = Column(String(20), nullable=False)  # user, assistant, system
+    content = Column(Text, nullable=False)
+    tool_calls = Column(Text, nullable=True)  # JSON string for tool usage
+    attachments = Column(Text, nullable=True)  # JSON string for image attachments
+    tokens_used = Column(Integer, nullable=True)  # Track token usage
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    conversation = relationship("Conversation", back_populates="messages")
+
+# Legacy table for backwards compatibility during migration
 class UserAssistant(Base):
     __tablename__ = "user_assistants"
     
@@ -33,11 +90,12 @@ class UserAssistant(Base):
     instructions = Column(Text, nullable=True)
     file_ids = Column(Text, nullable=True)  # JSON string
     model = Column(String(50), default="gpt-4o-mini")
+    thread_id = Column(String(255), nullable=True)  # Assistant-specific thread ID
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
-    user = relationship("User", back_populates="assistants")
+    user = relationship("User", back_populates="legacy_assistants")
 
 class FileMetadata(Base):
     __tablename__ = "file_metadata"
@@ -49,6 +107,10 @@ class FileMetadata(Base):
     mime_type = Column(String(100), nullable=True)
     purpose = Column(String(50), nullable=False)  # assistants or vision
     uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    # Image-specific fields
+    width = Column(Integer, nullable=True)
+    height = Column(Integer, nullable=True)
+    preview_data = Column(Text, nullable=True)  # Base64 encoded thumbnail
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relationships
