@@ -184,6 +184,7 @@
 import { ref, reactive, computed } from 'vue'
 import type { ImageAttachment, ImageUploadStatus } from '@/types'
 import { apiClient } from '@/utils/api'
+import api from '@/utils/api'
 
 interface Props {
   maxFiles?: number
@@ -291,7 +292,11 @@ const uploadImage = async (uploadStatus: ImageUploadStatus & { preview?: string 
     formData.append('file', uploadStatus.file)
     formData.append('purpose', 'vision') // For OpenAI vision API
     
-    const response = await apiClient.post('/api/files/upload', formData, {
+    // Use direct axios call with full URL to bypass baseURL issues
+    const uploadUrl = `${import.meta.env.VITE_API_URL || '/api'}/files/upload`
+    console.log('Upload URL:', uploadUrl) // Debug logging
+    
+    const response = await api.post(uploadUrl, formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       },
@@ -302,8 +307,9 @@ const uploadImage = async (uploadStatus: ImageUploadStatus & { preview?: string 
       }
     })
     
-    if (!response.success || !response.data) {
-      throw new Error(response.error?.message || 'Upload failed')
+    // Check if upload was successful
+    if (!response.data) {
+      throw new Error('Upload failed - no data returned')
     }
     
     uploadStatus.status = 'processing'
@@ -312,9 +318,9 @@ const uploadImage = async (uploadStatus: ImageUploadStatus & { preview?: string 
     const imageAttachment: ImageAttachment = {
       id: response.data.id,
       file_id: response.data.file_id,
-      name: response.data.filename,
+      name: response.data.name,
       size: response.data.size,
-      type: response.data.content_type,
+      type: response.data.type,
       url: response.data.url,
       preview_url: response.data.preview_url,
       width: response.data.width,
