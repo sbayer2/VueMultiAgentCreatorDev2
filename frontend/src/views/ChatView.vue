@@ -189,7 +189,7 @@ const {
 // Computed
 const currentAssistantName = computed(() => {
   if (!currentConversation.value) return ''
-  const assistant = assistantsList.find(a => a.id === currentConversation.value!.assistant_id)
+  const assistant = assistantsList.value.find(a => a.id === currentConversation.value!.assistant_id)
   return assistant?.name || 'Unknown Assistant'
 })
 
