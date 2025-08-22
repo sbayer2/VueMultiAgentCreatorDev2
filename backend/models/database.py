@@ -89,7 +89,7 @@ class UserAssistant(Base):
     description = Column(Text, nullable=True)
     instructions = Column(Text, nullable=True)
     file_ids = Column(Text, nullable=True)  # JSON string
-    model = Column(String(50), default="gpt-4o-mini")
+    model = Column(String(50), default="gpt-4o")  # Default to vision-capable model
     thread_id = Column(String(255), nullable=True)  # Assistant-specific thread ID
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

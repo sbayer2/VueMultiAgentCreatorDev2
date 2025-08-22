@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from openai import OpenAI
 from openai.types.beta.threads import Message
 
-from models.database import get_db, User, UserAssistant
+from models.database import get_db, User, UserAssistant, FileMetadata
 from api.auth import get_current_user
 from utils.config import settings
 from utils.websocket import ConnectionManager
@@ -126,14 +126,46 @@ async def send_message(
     thread_id = db_assistant.thread_id
     
     try:
-        # Build message content array like MMACTEMP (lines 493-530)
+        # MMACTEMP Pattern: Separate vision files from assistant files
         message_content = [{"type": "text", "text": message.content}]
+        image_file_ids = []  # Vision files for message content
+        file_ids_for_code_interpreter = []  # Assistant files for tool resources
         
-        # Add image files to message content if any (MMACTEMP pattern)
+        # Categorize files by purpose (MMACTEMP lines 500-514)
         if message.file_ids:
             for file_id in message.file_ids:
-                # For now, assume they're vision files - could be enhanced to check file type
-                message_content.append({"type": "image_file", "image_file": {"file_id": file_id}})
+                # Query database to check file purpose
+                file_metadata = db.query(FileMetadata).filter(
+                    FileMetadata.file_id == file_id,
+                    FileMetadata.uploaded_by == current_user.id
+                ).first()
+                
+                if file_metadata:
+                    if file_metadata.purpose == 'vision':
+                        image_file_ids.append(file_id)
+                    elif file_metadata.purpose == 'assistants':
+                        file_ids_for_code_interpreter.append(file_id)
+        
+        # Add vision files to message content (MMACTEMP lines 526-528)
+        for image_file_id in image_file_ids:
+            message_content.append({"type": "image_file", "image_file": {"file_id": image_file_id}})
+        
+        # Update assistant with code_interpreter file resources (MMACTEMP lines 516-524)
+        if file_ids_for_code_interpreter:
+            try:
+                current_assistant = client.beta.assistants.retrieve(message.assistant_id)
+                # Update assistant tool resources with code interpreter files
+                client.beta.assistants.update(
+                    assistant_id=message.assistant_id,
+                    tools=current_assistant.tools,
+                    tool_resources={
+                        "code_interpreter": {
+                            "file_ids": list(set(file_ids_for_code_interpreter))  # Unique file IDs
+                        }
+                    }
+                )
+            except Exception as e:
+                print(f"Warning: Failed to update assistant tool resources: {e}")
         
         # Create message using MMACTEMP pattern
         thread_message = client.beta.threads.messages.create(

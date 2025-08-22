@@ -324,7 +324,7 @@ const resetThread = async () => {
   try {
     // Get the assistant from the conversation to get the OpenAI assistant ID
     const assistantsStore = useAssistantsStore()
-    const assistant = assistantsStore.getAssistantById(props.conversation.assistant_id)
+    const assistant = assistantsStore.getAssistantById.value(props.conversation.assistant_id)
     
     if (assistant) {
       // Call the new-thread endpoint with the OpenAI assistant ID

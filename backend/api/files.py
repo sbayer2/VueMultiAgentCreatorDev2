@@ -52,11 +52,19 @@ class ImageAttachmentResponse(BaseModel):
 @router.post("/upload", response_model=ImageAttachmentResponse)
 async def upload_image(
     file: UploadFile = File(...),
-    purpose: str = "assistants",  # Default to assistants for code interpreter
+    purpose: str = None,  # Will be determined by MMACTEMP pattern
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Upload image file with vision support"""
+    # MMACTEMP Pattern: Determine purpose by file extension (lines 646-652)
+    if purpose is None:
+        file_extension = file.filename.split('.')[-1].lower() if file.filename else ''
+        if file_extension in ['jpg', 'jpeg', 'png', 'webp', 'gif']:
+            purpose = 'vision'
+        else:
+            purpose = 'assistants'
+    
     # Validate file type
     if not file.content_type or file.content_type not in SUPPORTED_IMAGE_TYPES:
         raise HTTPException(
@@ -303,6 +311,26 @@ async def list_files(
         )
         for f in files
     ]
+
+@router.get("/by-purpose")
+async def get_files_by_purpose(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get files organized by purpose (MMACTEMP pattern)"""
+    files = db.query(FileMetadata).filter(
+        FileMetadata.uploaded_by == current_user.id
+    ).all()
+    
+    result = {
+        'assistants': {},
+        'vision': {}
+    }
+    
+    for file in files:
+        result[file.purpose][file.file_id] = file.original_name
+    
+    return result
 
 @router.get("/{file_id}/content")
 async def get_file_content(

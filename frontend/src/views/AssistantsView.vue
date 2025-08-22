@@ -11,7 +11,7 @@
         </div>
         
         <router-link
-          to="/assistants/create"
+          to="/dashboard/assistants/create"
           class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
         >
           <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -56,7 +56,7 @@
           Get started by creating your first AI assistant with custom instructions and tools.
         </p>
         <router-link
-          to="/assistants/create"
+          to="/dashboard/assistants/create"
           class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
           <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -153,7 +153,7 @@
                 >
                   <div class="py-1">
                     <button
-                      @click="startChat(assistant)"
+                      @click.stop="startChat(assistant)"
                       class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center"
                     >
                       <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -162,7 +162,7 @@
                       Start Chat
                     </button>
                     <router-link
-                      :to="`/assistants/${assistant.id}/edit`"
+                      :to="`/dashboard/assistants/${assistant.id}/edit`"
                       class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center"
                     >
                       <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -171,7 +171,7 @@
                       Edit
                     </router-link>
                     <button
-                      @click="confirmDelete(assistant)"
+                      @click.stop="confirmDelete(assistant)"
                       class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"
                     >
                       <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
