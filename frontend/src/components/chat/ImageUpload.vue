@@ -342,7 +342,33 @@ const uploadImage = async (uploadStatus: ImageUploadStatus & { preview?: string 
     
   } catch (error: any) {
     uploadStatus.status = 'error'
-    uploadStatus.error = error.message || 'Upload failed'
+    
+    // Enhanced error logging for debugging
+    console.error('Image upload error:', {
+      error: error,
+      response: error.response,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      config: {
+        url: error.config?.url,
+        method: error.config?.method,
+        headers: error.config?.headers
+      }
+    })
+    
+    let errorMessage = 'Upload failed'
+    if (error.response?.status === 404) {
+      errorMessage = `Upload endpoint not found (404). URL: ${error.config?.url}`
+    } else if (error.response?.status === 401) {
+      errorMessage = 'Authentication required. Please log in again.'
+    } else if (error.response?.data?.detail) {
+      errorMessage = error.response.data.detail
+    } else if (error.message) {
+      errorMessage = error.message
+    }
+    
+    uploadStatus.error = errorMessage
     emit('upload-error', uploadStatus.error)
   }
 }
