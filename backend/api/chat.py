@@ -142,14 +142,16 @@ async def send_message(
                 ).first()
                 
                 if file_metadata:
-                    # Check if it's an image by MIME type (MMACTEMP pattern)
-                    is_image = file_metadata.mime_type and file_metadata.mime_type.startswith('image/')
+                    # Check if it's an image by MIME type or purpose
+                    is_image = (file_metadata.mime_type and file_metadata.mime_type.startswith('image/')) or file_metadata.purpose == 'vision'
                     
-                    if is_image or file_metadata.purpose == 'vision':
-                        # Images go to message content for vision, regardless of stored purpose
+                    if is_image:
+                        # Images: Add to message content for model vision
                         image_file_ids.append(file_id)
-                    elif file_metadata.purpose == 'assistants' and not is_image:
-                        # Non-image assistant files go to tool_resources
+                        # ALSO add to tool_resources so Python can process the image
+                        file_ids_for_code_interpreter.append(file_id)
+                    elif file_metadata.purpose == 'assistants':
+                        # Non-image documents: Only to tool_resources
                         file_ids_for_code_interpreter.append(file_id)
         
         # Add vision files to message content (MMACTEMP lines 526-528)
@@ -338,14 +340,16 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                         ).first()
                         
                         if file_metadata:
-                            # Check if it's an image by MIME type (MMACTEMP pattern)
-                            is_image = file_metadata.mime_type and file_metadata.mime_type.startswith('image/')
+                            # Check if it's an image by MIME type or purpose
+                            is_image = (file_metadata.mime_type and file_metadata.mime_type.startswith('image/')) or file_metadata.purpose == 'vision'
                             
-                            if is_image or file_metadata.purpose == 'vision':
-                                # Images go to message content for vision, regardless of stored purpose
+                            if is_image:
+                                # Images: Add to message content for model vision
                                 image_file_ids.append(file_id)
-                            elif file_metadata.purpose == 'assistants' and not is_image:
-                                # Non-image assistant files go to tool_resources
+                                # ALSO add to tool_resources so Python can process the image
+                                file_ids_for_code_interpreter.append(file_id)
+                            elif file_metadata.purpose == 'assistants':
+                                # Non-image documents: Only to tool_resources
                                 file_ids_for_code_interpreter.append(file_id)
                 
                 # Add vision files to message content

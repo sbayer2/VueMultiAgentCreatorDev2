@@ -90,22 +90,24 @@ async def create_assistant(
         # Create OpenAI assistant with proper tools (MMACTEMP pattern)
         tools = [{"type": "code_interpreter"}]  # Primary tool for file handling
         
-        # MMACTEMP Pattern: Separate vision files from assistant files
+        # MMACTEMP Pattern: Collect ALL files for tool_resources (including vision images)
+        # Key insight: Images can be in BOTH message content AND tool_resources
         unique_file_ids = list(set(assistant_data.file_ids)) if assistant_data.file_ids else []
-        assistant_file_ids = []  # Only files with purpose='assistants' for code_interpreter
+        tool_resources_file_ids = []  # All files that Python code_interpreter can access
         
         if unique_file_ids:
-            # Query database to separate files by purpose
+            # Query database to get all files
             db_files = db.query(FileMetadata).filter(
                 FileMetadata.file_id.in_(unique_file_ids),
                 FileMetadata.uploaded_by == current_user.id
             ).all()
             
-            # Only add files with purpose='assistants' to tool_resources
-            assistant_file_ids = [f.file_id for f in db_files if f.purpose == 'assistants']
+            # Add ALL files to tool_resources (both 'vision' and 'assistants')
+            # This allows Python to access images AND documents
+            tool_resources_file_ids = [f.file_id for f in db_files]
         
-        # Create with tool_resources only for assistant files (not vision files)
-        if assistant_file_ids:
+        # Create assistant with tool_resources for ALL files
+        if tool_resources_file_ids:
             openai_assistant = client.beta.assistants.create(
                 name=assistant_data.name,
                 instructions=assistant_data.instructions,
@@ -113,7 +115,7 @@ async def create_assistant(
                 tools=tools,
                 tool_resources={
                     "code_interpreter": {
-                        "file_ids": assistant_file_ids
+                        "file_ids": tool_resources_file_ids
                     }
                 }
             )
@@ -133,7 +135,7 @@ async def create_assistant(
             description=assistant_data.description,
             instructions=assistant_data.instructions,
             model=assistant_data.model,
-            file_ids=json.dumps(assistant_file_ids)  # Only save assistant files, not vision files
+            file_ids=json.dumps(tool_resources_file_ids)  # Save all files for assistant
         )
         db.add(db_assistant)
         db.commit()

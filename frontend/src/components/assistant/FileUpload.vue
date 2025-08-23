@@ -227,9 +227,10 @@ const uploadFile = async (file: File) => {
   })
   
   try {
-    // For assistant creation, all files (including images) should be 'assistants' 
-    // so they can be attached to the assistant's tool_resources
-    const purpose = 'assistants'
+    // Correct MMACTEMP: Upload with proper purpose from the start
+    // Images for model vision → purpose="vision"
+    // Files for code interpreter → purpose="assistants"
+    const purpose = isImageFile(file.name) ? 'vision' : 'assistants'
     
     // Create form data
     const formData = new FormData()
