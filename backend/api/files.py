@@ -3,7 +3,7 @@ import os
 import io
 import uuid
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Response
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Response
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from openai import OpenAI
@@ -52,18 +52,25 @@ class ImageAttachmentResponse(BaseModel):
 @router.post("/upload", response_model=ImageAttachmentResponse)
 async def upload_image(
     file: UploadFile = File(...),
-    purpose: str = None,  # Will be determined by MMACTEMP pattern
+    purpose: Optional[str] = Form(None),  # Use Form to properly receive FormData
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Upload image file with vision support"""
-    # MMACTEMP Pattern: Determine purpose by file extension (lines 646-652)
-    if purpose is None:
-        file_extension = file.filename.split('.')[-1].lower() if file.filename else ''
+    # Log received parameters
+    received_purpose = purpose
+    file_extension = file.filename.split('.')[-1].lower() if file.filename else ''
+    
+    # MMACTEMP Pattern: Determine purpose by file extension if not provided
+    if purpose is None or purpose == "":
         if file_extension in ['jpg', 'jpeg', 'png', 'webp', 'gif']:
             purpose = 'vision'
         else:
             purpose = 'assistants'
+    
+    # Log for debugging
+    print(f"File upload: {file.filename}, received purpose: {received_purpose}, final purpose: {purpose}")
+    print(f"File extension: {file_extension}, content_type: {file.content_type}")
     
     # Validate file type
     if not file.content_type or file.content_type not in SUPPORTED_IMAGE_TYPES:

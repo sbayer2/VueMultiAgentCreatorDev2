@@ -1022,3 +1022,85 @@ Common issues and solutions (authentication flow is currently working):
              stroke="currentColor" viewBox="0 0 24 24">
 
 ⏺ Perfect! Now let me deploy this fix:
+- ✅ Complete MMACTEMP Pattern Implementation
+
+  I've successfully implemented the complete MMACTEMP pattern exactly as
+  specified. Here's what was implemented:
+
+  A) File Upload with Purpose Split ✅
+
+  - Already working: Files are uploaded with purpose: 'vision' for images
+   and purpose: 'assistants' for documents
+  - File IDs stored consistently: All file IDs are stored in database
+  consistently (not URLs)
+
+  B) Assistant Code-Interpreter Files ✅
+
+  - Non-image files only: Only files with purpose: 'assistants' are added
+   to tool_resources
+  - Vision files excluded: Files with purpose: 'vision' are NOT attached
+  to tool_resources
+
+  C) Complete Message Flow ✅
+
+  # 1) Create the user message with text + image blocks
+  _ = client.beta.threads.messages.create(
+      thread_id=thread_id,
+      role="user",
+      content=message_content,  # Includes text + vision files
+  )
+
+  # 2) Start a run with ONLY code-interpreter file_ids (not images)
+  run = client.beta.threads.runs.create(
+      thread_id=thread_id,
+      assistant_id=assistant_id,
+      tool_resources={
+          "code_interpreter": {"file_ids": file_ids_for_code_interpreter}
+      } if file_ids_for_code_interpreter else None
+  )
+
+  # 3) Poll to completion (Option A - reliable)
+  while True:
+      run = client.beta.threads.runs.retrieve(thread_id=thread_id,
+  run_id=run.id)
+      if run.status in ("completed", "failed", "cancelled", "expired"):
+          break
+      await asyncio.sleep(0.8)
+
+  D) Database Consistency ✅
+
+  - File IDs stored: All file references use file.id from
+  client.files.create()
+  - Display code ready: Current display code expects
+  content.image_file.file_id format
+
+  E) Vision Files Separation ✅
+
+  - No tool_resources mixing: Vision files are never added to
+  tool_resources
+  - Proper content blocks: Vision files are added as image_file content
+  blocks in messages
+
+  🚀 Key Improvements
+
+  1. Proper File Categorization: Database queries separate vision vs
+  assistant files by purpose
+  2. Tool Resources: Only assistant files are passed to
+  tool_resources.code_interpreter
+  3. Message Content: Vision files are added as image_file blocks in
+  message content
+  4. Polling Implementation: Reliable 0.8s polling with proper status
+  checking
+  5. Streaming Support: WebSocket endpoint also implements the complete
+  pattern
+
+  🔄 Both Endpoints Updated
+
+  - /api/chat/message: Non-streaming endpoint with polling
+  - /api/chat/ws/{token}: Streaming WebSocket endpoint
+
+  Both now implement the complete MMACTEMP pattern with proper file
+  separation and tool_resources management.
+
+  The system now matches the exact pattern from your working MMACTEMP
+  implementation with all the critical components in place!
