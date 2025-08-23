@@ -179,11 +179,12 @@ async def process_image(contents: bytes, content_type: str) -> dict:
 @router.post("/upload-for-assistant", response_model=FileResponse)
 async def upload_file_for_assistant(
     file: UploadFile = File(...),
+    purpose: Optional[str] = Form(None),  # Accept purpose from frontend
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Upload file for assistant use (images and documents) - MMACTEMP pattern"""
-    # Determine purpose based on file type
+    # Determine file types
     is_image = file.content_type in SUPPORTED_IMAGE_TYPES
     is_document = file.content_type in SUPPORTED_DOCUMENT_TYPES
     
@@ -193,8 +194,12 @@ async def upload_file_for_assistant(
             detail=f"Unsupported file type: {file.content_type}. Supported: images and documents"
         )
     
-    # Set purpose for OpenAI (assistants for code_interpreter)
-    purpose = "assistants"
+    # Use purpose from frontend, or determine based on file type (MMACTEMP pattern)
+    if purpose is None or purpose == "":
+        purpose = "vision" if is_image else "assistants"
+    
+    # Log for debugging
+    print(f"Assistant file upload: {file.filename}, purpose: {purpose}, content_type: {file.content_type}")
     
     # Read file contents
     contents = await file.read()
