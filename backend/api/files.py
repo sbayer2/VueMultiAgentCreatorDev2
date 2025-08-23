@@ -111,16 +111,25 @@ async def upload_image(
         # Save metadata to database with image-specific fields
         from datetime import datetime
         
+        # Limit filename length to prevent MySQL errors
+        safe_filename = (file.filename or file_obj.name)[:250] if (file.filename or file_obj.name) else f"image_{uuid.uuid4()}.png"
+        
+        # Limit preview data size to prevent MySQL errors
+        preview_data = image_info.get('preview_base64')
+        if preview_data and len(preview_data) > 50000:  # Limit to ~50KB
+            print(f"Warning: Preview data too large ({len(preview_data)} chars), skipping preview")
+            preview_data = None
+        
         db_file = FileMetadata(
             file_id=openai_file.id,
-            original_name=file.filename or file_obj.name,
+            original_name=safe_filename,
             size=file_size,
             mime_type=file.content_type,
             purpose=purpose,
             uploaded_by=current_user.id,
             width=image_info.get('width'),
             height=image_info.get('height'),
-            preview_data=image_info.get('preview_base64')
+            preview_data=preview_data
         )
         db.add(db_file)
         db.commit()
@@ -174,6 +183,8 @@ async def process_image(contents: bytes, content_type: str) -> dict:
         
     except Exception as e:
         print(f"Image processing error: {e}")
+        # For vision files, we can still proceed without image processing metadata
+        print(f"Proceeding with upload despite image processing error")
         return {'width': None, 'height': None, 'preview_base64': None}
 
 @router.post("/upload-for-assistant", response_model=FileResponse)
