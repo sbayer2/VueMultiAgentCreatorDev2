@@ -105,26 +105,51 @@ async def send_message(
     db: Session = Depends(get_db)
 ):
     """Send message to assistant (non-streaming) - MMACTEMP Pattern"""
+    print(f"DEBUG: Chat message received - assistant_id: {message.assistant_id}, content length: {len(message.content)}, file_ids: {message.file_ids}")
+    print(f"DEBUG: User: {current_user.id} ({current_user.username})")
     # Get assistant-specific thread ID
+    print(f"DEBUG: Looking for assistant {message.assistant_id} for user {current_user.id}")
     db_assistant = db.query(UserAssistant).filter(
         UserAssistant.assistant_id == message.assistant_id,
         UserAssistant.user_id == current_user.id
     ).first()
     
+    print(f"DEBUG: Found assistant: {db_assistant is not None}")
+    if db_assistant:
+        print(f"DEBUG: Assistant details - name: {db_assistant.name}, thread_id: {db_assistant.thread_id}")
+    
     if not db_assistant:
+        print(f"DEBUG: Assistant not found - looking for assistant_id: {message.assistant_id}, user_id: {current_user.id}")
+        # Let's also check what assistants exist for this user
+        all_assistants = db.query(UserAssistant).filter(UserAssistant.user_id == current_user.id).all()
+        print(f"DEBUG: User has {len(all_assistants)} assistants: {[a.assistant_id for a in all_assistants]}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Assistant not found"
         )
     
     # Create assistant-specific thread if it doesn't exist
-    if not db_assistant.thread_id:
-        thread = client.beta.threads.create()
-        db_assistant.thread_id = thread.id
-        db.add(db_assistant)
-        db.commit()
-    
     thread_id = db_assistant.thread_id
+    if not thread_id:
+        print(f"DEBUG: Creating new thread for assistant {db_assistant.name}")
+        try:
+            thread = client.beta.threads.create()
+            thread_id = thread.id
+            print(f"DEBUG: Created thread {thread_id}")
+            
+            # Update database with new thread ID
+            db_assistant.thread_id = thread_id
+            db.add(db_assistant)
+            db.commit()
+            print(f"DEBUG: Updated database with thread_id {thread_id}")
+        except Exception as e:
+            print(f"DEBUG: Error creating thread: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to create thread: {str(e)}"
+            )
+    else:
+        print(f"DEBUG: Using existing thread {thread_id}")
     
     try:
         # MMACTEMP Pattern: Separate vision files from assistant files
@@ -165,18 +190,35 @@ async def send_message(
             content=message_content  # Use content array like MMACTEMP
         )
         
-        # Create run with code_interpreter tool_resources (MMACTEMP Pattern C)
-        tool_resources = None
-        if file_ids_for_code_interpreter:
-            tool_resources = {
-                "code_interpreter": {"file_ids": file_ids_for_code_interpreter}
-            }
+        # Note: tool_resources in runs.create() not supported in current OpenAI API
+        # Files are handled through message content and assistant configuration
         
-        run = client.beta.threads.runs.create(
-            thread_id=thread_id,
-            assistant_id=message.assistant_id,
-            tool_resources=tool_resources
-        )
+        # Verify assistant exists in OpenAI before creating run
+        print(f"DEBUG: Verifying assistant {message.assistant_id} exists in OpenAI")
+        try:
+            openai_assistant = client.beta.assistants.retrieve(message.assistant_id)
+            print(f"DEBUG: Assistant verified: {openai_assistant.name}")
+        except Exception as e:
+            print(f"DEBUG: Assistant {message.assistant_id} not found in OpenAI: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Assistant not found in OpenAI: {str(e)}"
+            )
+        
+        print(f"DEBUG: About to create run with assistant_id: {message.assistant_id}")
+        try:
+            # Create run without tool_resources (not supported in current API)
+            run = client.beta.threads.runs.create(
+                thread_id=thread_id,
+                assistant_id=message.assistant_id
+            )
+            print(f"DEBUG: Run created successfully: {run.id}")
+        except Exception as e:
+            print(f"DEBUG: Error creating run: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Failed to create run: {str(e)}"
+            )
         
         # Poll to completion (MMACTEMP Pattern C - Option A)
         while True:
