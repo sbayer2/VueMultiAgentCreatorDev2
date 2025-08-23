@@ -1,6 +1,7 @@
 """Chat endpoints with WebSocket support"""
 import json
 import asyncio
+import time
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
@@ -150,23 +151,6 @@ async def send_message(
         for image_file_id in image_file_ids:
             message_content.append({"type": "image_file", "image_file": {"file_id": image_file_id}})
         
-        # Update assistant with code_interpreter file resources (MMACTEMP lines 516-524)
-        if file_ids_for_code_interpreter:
-            try:
-                current_assistant = client.beta.assistants.retrieve(message.assistant_id)
-                # Update assistant tool resources with code interpreter files
-                client.beta.assistants.update(
-                    assistant_id=message.assistant_id,
-                    tools=current_assistant.tools,
-                    tool_resources={
-                        "code_interpreter": {
-                            "file_ids": list(set(file_ids_for_code_interpreter))  # Unique file IDs
-                        }
-                    }
-                )
-            except Exception as e:
-                print(f"Warning: Failed to update assistant tool resources: {e}")
-        
         # Create message using MMACTEMP pattern
         thread_message = client.beta.threads.messages.create(
             thread_id=thread_id,
@@ -174,19 +158,25 @@ async def send_message(
             content=message_content  # Use content array like MMACTEMP
         )
         
-        # Create run using simple pattern from MMACTEMP  
+        # Create run with code_interpreter tool_resources (MMACTEMP Pattern C)
+        tool_resources = None
+        if file_ids_for_code_interpreter:
+            tool_resources = {
+                "code_interpreter": {"file_ids": file_ids_for_code_interpreter}
+            }
+        
         run = client.beta.threads.runs.create(
             thread_id=thread_id,
-            assistant_id=message.assistant_id
+            assistant_id=message.assistant_id,
+            tool_resources=tool_resources
         )
         
-        # Wait for completion
-        while run.status in ["queued", "in_progress"]:
-            await asyncio.sleep(1)
-            run = client.beta.threads.runs.retrieve(
-                thread_id=thread_id,
-                run_id=run.id
-            )
+        # Poll to completion (MMACTEMP Pattern C - Option A)
+        while True:
+            run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run.id)
+            if run.status in ("completed", "failed", "cancelled", "expired"):
+                break
+            await asyncio.sleep(0.8)
         
         if run.status == "completed":
             # Get messages
@@ -330,27 +320,50 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
                 
                 # Build message content array like MMACTEMP (lines 493-530)
                 message_content = [{"type": "text", "text": data["content"]}]
+                image_file_ids = []  # Vision files for message content
+                file_ids_for_code_interpreter = []  # Assistant files for tool resources
                 
-                # Add image files to message content if any (MMACTEMP pattern)
+                # Categorize files by purpose (MMACTEMP pattern)
                 if data.get("file_ids"):
                     for file_id in data["file_ids"]:
-                        # For now, assume they're vision files - could be enhanced to check file type
-                        message_content.append({"type": "image_file", "image_file": {"file_id": file_id}})
+                        # Query database to check file purpose
+                        file_metadata = db.query(FileMetadata).filter(
+                            FileMetadata.file_id == file_id,
+                            FileMetadata.uploaded_by == user.id
+                        ).first()
+                        
+                        if file_metadata:
+                            if file_metadata.purpose == 'vision':
+                                image_file_ids.append(file_id)
+                            elif file_metadata.purpose == 'assistants':
+                                file_ids_for_code_interpreter.append(file_id)
                 
-                # Add message to thread using MMACTEMP pattern
-                message = client.beta.threads.messages.create(
+                # Add vision files to message content
+                for image_file_id in image_file_ids:
+                    message_content.append({"type": "image_file", "image_file": {"file_id": image_file_id}})
+                
+                # Create the user message with text + image blocks (MMACTEMP Pattern C)
+                _ = client.beta.threads.messages.create(
                     thread_id=thread_id,
                     role="user",
-                    content=message_content  # Use content array like MMACTEMP
+                    content=message_content,
                 )
+                
+                # Start a run with ONLY code-interpreter file_ids (not images) (MMACTEMP Pattern C)
+                tool_resources = None
+                if file_ids_for_code_interpreter:
+                    tool_resources = {
+                        "code_interpreter": {"file_ids": file_ids_for_code_interpreter}
+                    }
                 
                 # Create event handler with thread ID
                 handler = StreamingEventHandler(websocket, thread_id)
                 
-                # Stream the response using MMACTEMP pattern (simplified)
+                # Stream the response using MMACTEMP pattern with tool_resources
                 with client.beta.threads.runs.stream(
                     thread_id=thread_id,
                     assistant_id=data["assistant_id"],
+                    tool_resources=tool_resources,
                     event_handler=handler,
                 ) as stream:
                     stream.until_done()
