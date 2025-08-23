@@ -194,9 +194,9 @@ async def upload_file_for_assistant(
             detail=f"Unsupported file type: {file.content_type}. Supported: images and documents"
         )
     
-    # Use purpose from frontend, or determine based on file type (MMACTEMP pattern)
+    # Use purpose from frontend, or default to assistants for assistant creation
     if purpose is None or purpose == "":
-        purpose = "vision" if is_image else "assistants"
+        purpose = "assistants"  # Default to assistants for assistant creation
     
     # Log for debugging
     print(f"Assistant file upload: {file.filename}, purpose: {purpose}, content_type: {file.content_type}")

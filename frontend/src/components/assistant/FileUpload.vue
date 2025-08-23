@@ -227,8 +227,9 @@ const uploadFile = async (file: File) => {
   })
   
   try {
-    // Determine purpose based on file type
-    const purpose = isImageFile(file.name) ? 'vision' : 'assistants'
+    // For assistant creation, all files (including images) should be 'assistants' 
+    // so they can be attached to the assistant's tool_resources
+    const purpose = 'assistants'
     
     // Create form data
     const formData = new FormData()
