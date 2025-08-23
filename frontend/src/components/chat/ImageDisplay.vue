@@ -7,7 +7,7 @@
       @click="openLightbox(0)"
     >
       <img
-        :src="images[0].preview_url || images[0].url"
+        :src="getImageUrl(images[0])"
         :alt="images[0].name"
         class="single-image cursor-pointer rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200"
         :style="singleImageStyle"
@@ -33,7 +33,7 @@
         @click="openLightbox(index)"
       >
         <img
-          :src="image.preview_url || image.url"
+          :src="getImageUrl(image)"
           :alt="image.name"
           class="w-full h-full object-cover"
           @load="onImageLoad($event, image)"
@@ -129,7 +129,7 @@
           @click.stop
         >
           <img
-            :src="currentImage?.url || currentImage?.preview_url"
+            :src="currentImage ? getImageUrl(currentImage) : ''"
             :alt="currentImage?.name"
             class="max-w-full max-h-full object-contain"
           />
@@ -166,7 +166,7 @@
             ]"
           >
             <img
-              :src="image.preview_url || image.url"
+              :src="getImageUrl(image)"
               :alt="image.name"
               class="w-full h-full object-cover"
             />
@@ -218,6 +218,15 @@ const singleImageStyle = computed(() => {
 })
 
 // Methods
+const getImageUrl = (image: ImageAttachment) => {
+  // Use existing URL if available, otherwise build URL from file_id
+  if (image.url || image.preview_url) {
+    return image.preview_url || image.url
+  }
+  // Build URL from file_id for MMACTEMP pattern
+  return `/api/files/openai/${image.file_id}`
+}
+
 const onImageLoad = (event: Event, image: ImageAttachment) => {
   const target = event.target as HTMLImageElement
   

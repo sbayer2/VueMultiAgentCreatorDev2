@@ -26,11 +26,6 @@ class ChatMessage(BaseModel):
 class ImageAttachment(BaseModel):
     file_id: str
     type: str = "image"
-    url: Optional[str] = None
-    preview_url: Optional[str] = None
-    name: Optional[str] = None
-    size: Optional[int] = None
-    uploaded_at: Optional[str] = None
 
 class ChatResponse(BaseModel):
     message_id: str
@@ -251,16 +246,9 @@ async def send_message(
                         content_parts.append(content.text.value)
                     elif content.type == 'image_file':
                         file_id = content.image_file.file_id
-                        # Create URL for our OpenAI file serving endpoint (MMACTEMP pattern)
-                        file_url = f"/api/files/openai/{file_id}"
                         image_attachments.append(ImageAttachment(
                             file_id=file_id,
-                            type="image",
-                            url=file_url,
-                            preview_url=file_url,  # Use same URL for preview
-                            name=f"image_{file_id}.png",  # Default name
-                            size=0,  # We don't have size info from OpenAI response
-                            uploaded_at=last_message.created_at or ""
+                            type="image"
                         ))
                 
                 text_content = '\n'.join(content_parts) if content_parts else ""
