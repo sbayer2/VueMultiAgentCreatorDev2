@@ -240,49 +240,51 @@ const originalData = ref<UpdateAssistantData | null>(null)
 
 // Get assistant ID from route params
 const assistantId = computed(() => {
-  const id = props.id || route.params.id as string
-  return id ? parseInt(id, 10) : null
+  return props.id || route.params.id as string
 })
 
 // Form setup
-const { 
-  form, 
-  errors, 
-  isLoading, 
-  validate, 
-  resetForm: resetFormData
+const {
+  values: form,
+  errors,
+  isSubmitting: isLoading,
+  validateAllFields: validate,
+  reset: resetFormData
 } = useForm<UpdateAssistantData>({
-  name: '',
-  description: '',
-  instructions: '',
-  model: 'gpt-4o-mini',
-  tools: {
-    web_search: false,
-    file_search: false,
-    code_interpreter: false,
-    computer_use: false,
-    vector_store_ids: []
-  }
-}, {
-  name: (value: string) => {
-    if (!value?.trim()) return 'Assistant name is required'
-    if (value.length < 2) return 'Name must be at least 2 characters'
-    if (value.length > 100) return 'Name cannot exceed 100 characters'
-    return null
+  initialValues: {
+    name: '',
+    description: '',
+    instructions: '',
+    model: 'gpt-4o-mini',
+    tools: {
+      web_search: false,
+      file_search: false,
+      code_interpreter: false,
+      computer_use: false,
+      vector_store_ids: []
+    }
   },
-  model: (value: string) => {
-    if (!value) return 'Please select a model'
-    return null
-  },
-  instructions: (value: string) => {
-    if (!value?.trim()) return 'Instructions are required'
-    if (value.length < 10) return 'Instructions must be at least 10 characters'
-    if (value.length > 32000) return 'Instructions cannot exceed 32,000 characters'
-    return null
-  },
-  description: (value?: string) => {
-    if (value && value.length > 500) return 'Description cannot exceed 500 characters'
-    return null
+  rules: {
+    name: (value: string) => {
+      if (!value?.trim()) return 'Assistant name is required'
+      if (value.length < 2) return 'Name must be at least 2 characters'
+      if (value.length > 100) return 'Name cannot exceed 100 characters'
+      return null
+    },
+    model: (value: string) => {
+      if (!value) return 'Please select a model'
+      return null
+    },
+    instructions: (value: string) => {
+      if (!value?.trim()) return 'Instructions are required'
+      if (value.length < 10) return 'Instructions must be at least 10 characters'
+      if (value.length > 32000) return 'Instructions cannot exceed 32,000 characters'
+      return null
+    },
+    description: (value?: string) => {
+      if (value && value.length > 500) return 'Description cannot exceed 500 characters'
+      return null
+    }
   }
 })
 

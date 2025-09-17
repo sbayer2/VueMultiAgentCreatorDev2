@@ -162,7 +162,7 @@
                       Start Chat
                     </button>
                     <router-link
-                      :to="`/dashboard/assistants/${assistant.id}/edit`"
+                      :to="`/dashboard/assistants/${assistant.assistant_id}/edit`"
                       class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center"
                     >
                       <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -308,24 +308,13 @@ const toggleDropdown = (assistantId: number) => {
   activeDropdown.value = activeDropdown.value === assistantId ? null : assistantId
 }
 
-const startChat = async (assistant: Assistant) => {
+const startChat = (assistant: Assistant) => {
   activeDropdown.value = null
-  
-  // Create a new conversation with the selected assistant
-  const result = await conversationsStore.createConversation({
-    assistant_id: assistant.id,
-    title: `Chat with ${assistant.name}`
+  conversationsStore.selectAssistantForChat(assistant)
+  router.push({ 
+    name: 'chat', 
+    params: { conversationId: assistant.id.toString() } 
   })
-  
-  if (result.success && result.data) {
-    // Navigate to chat view with the new conversation
-    await router.push({ 
-      name: 'chat', 
-      params: { conversationId: result.data.id.toString() } 
-    })
-  } else {
-    console.error('Failed to create conversation:', result.error)
-  }
 }
 
 const confirmDelete = (assistant: Assistant) => {
@@ -339,7 +328,7 @@ const handleDelete = async () => {
   isDeleting.value = true
   
   try {
-    const result = await assistantsStore.deleteAssistant(assistantToDelete.value.id)
+    const result = await assistantsStore.deleteAssistant(assistantToDelete.value.assistant_id)
     
     if (result.success) {
       assistantToDelete.value = null
