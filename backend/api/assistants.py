@@ -48,7 +48,10 @@ class AssistantResponse(BaseModel):
     instructions: Optional[str]
     model: str
     file_ids: List[str]
+    thread_id: Optional[str] = None
     tools: dict = {"web_search": False, "file_search": False, "code_interpreter": True, "computer_use": False}
+    conversation_count: int = 0
+    created_at: str
 
 @router.get("/models")
 async def get_available_models():
@@ -65,19 +68,76 @@ async def list_assistants(
         UserAssistant.user_id == current_user.id
     ).all()
     
-    return [
-        AssistantResponse(
+    result = []
+    for a in assistants:
+        # Get current file_ids from database
+        db_file_ids = json.loads(a.file_ids) if a.file_ids else []
+        
+        # Sync with OpenAI to get the actual attached files
+        try:
+            openai_assistant = client.beta.assistants.retrieve(a.assistant_id)
+            openai_file_ids = []
+            if hasattr(openai_assistant, 'tool_resources') and openai_assistant.tool_resources:
+                if hasattr(openai_assistant.tool_resources, 'code_interpreter') and openai_assistant.tool_resources.code_interpreter:
+                    if hasattr(openai_assistant.tool_resources.code_interpreter, 'file_ids'):
+                        openai_file_ids = openai_assistant.tool_resources.code_interpreter.file_ids or []
+            
+            print(f"DEBUG: Assistant {a.assistant_id} - DB files: {db_file_ids}, OpenAI files: {openai_file_ids}")
+            
+            # Use OpenAI's file list since it's the source of truth
+            actual_file_ids = openai_file_ids if openai_file_ids else db_file_ids
+            
+        except Exception as e:
+            print(f"DEBUG: Failed to get OpenAI assistant {a.assistant_id}: {e}")
+            actual_file_ids = db_file_ids
+        
+        result.append(AssistantResponse(
             id=a.id,
             assistant_id=a.assistant_id,
             name=a.name,
             description=a.description,
             instructions=a.instructions,
             model=a.model,
-            file_ids=json.loads(a.file_ids) if a.file_ids else [],
-            tools={"web_search": False, "file_search": False, "code_interpreter": True, "computer_use": False}
+            file_ids=actual_file_ids,
+            thread_id=a.thread_id,
+            tools={"web_search": False, "file_search": False, "code_interpreter": True, "computer_use": False, "vector_store_ids": []},
+            conversation_count=0,  # TODO: Implement actual conversation counting
+            created_at=a.created_at.isoformat() if a.created_at else ""
+        ))
+    
+    return result
+
+@router.get("/{assistant_id}", response_model=AssistantResponse)
+async def get_assistant(
+    assistant_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get a specific assistant by its ID."""
+    db_assistant = db.query(UserAssistant).filter(
+        UserAssistant.assistant_id == assistant_id,
+        UserAssistant.user_id == current_user.id
+    ).first()
+    
+    if not db_assistant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Assistant not found"
         )
-        for a in assistants
-    ]
+    
+    return AssistantResponse(
+        id=db_assistant.id,
+        assistant_id=db_assistant.assistant_id,
+        name=db_assistant.name,
+        description=db_assistant.description,
+        instructions=db_assistant.instructions,
+        model=db_assistant.model,
+        file_ids=json.loads(db_assistant.file_ids) if db_assistant.file_ids else [],
+        thread_id=db_assistant.thread_id,
+        tools={"web_search": False, "file_search": False, "code_interpreter": True, "computer_use": False, "vector_store_ids": []},
+        conversation_count=0,  # TODO: Implement actual conversation counting
+        created_at=db_assistant.created_at.isoformat() if db_assistant.created_at else ""
+    )
 
 @router.post("/", response_model=AssistantResponse)
 async def create_assistant(
@@ -85,49 +145,33 @@ async def create_assistant(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Create new assistant"""
+    """Create new assistant and automatically create a thread for it."""
     try:
-        # Create OpenAI assistant with proper tools (MMACTEMP pattern)
-        tools = [{"type": "code_interpreter"}]  # Primary tool for file handling
+        tools = [{"type": "code_interpreter"}]
         
-        # MMACTEMP Pattern: Collect ALL files for tool_resources (including vision images)
-        # Key insight: Images can be in BOTH message content AND tool_resources
         unique_file_ids = list(set(assistant_data.file_ids)) if assistant_data.file_ids else []
-        tool_resources_file_ids = []  # All files that Python code_interpreter can access
-        
+        tool_resources_file_ids = []
+
         if unique_file_ids:
-            # Query database to get all files
             db_files = db.query(FileMetadata).filter(
                 FileMetadata.file_id.in_(unique_file_ids),
                 FileMetadata.uploaded_by == current_user.id
             ).all()
-            
-            # Add ALL files to tool_resources (both 'vision' and 'assistants')
-            # This allows Python to access images AND documents
-            tool_resources_file_ids = [f.file_id for f in db_files]
-        
-        # Create assistant with tool_resources for ALL files
+            tool_resources_file_ids = [f.file_id for f in db_files if f.purpose == 'assistants']
+
+        assistant_params = {
+            "name": assistant_data.name,
+            "instructions": assistant_data.instructions,
+            "model": assistant_data.model,
+            "tools": tools
+        }
         if tool_resources_file_ids:
-            openai_assistant = client.beta.assistants.create(
-                name=assistant_data.name,
-                instructions=assistant_data.instructions,
-                model=assistant_data.model,
-                tools=tools,
-                tool_resources={
-                    "code_interpreter": {
-                        "file_ids": tool_resources_file_ids
-                    }
-                }
-            )
-        else:
-            openai_assistant = client.beta.assistants.create(
-                name=assistant_data.name,
-                instructions=assistant_data.instructions,
-                model=assistant_data.model,
-                tools=tools
-            )
+            assistant_params["tool_resources"] = {"code_interpreter": {"file_ids": tool_resources_file_ids}}
+
+        openai_assistant = client.beta.assistants.create(**assistant_params)
         
-        # Save to database
+        thread = client.beta.threads.create()
+        
         db_assistant = UserAssistant(
             user_id=current_user.id,
             assistant_id=openai_assistant.id,
@@ -135,7 +179,8 @@ async def create_assistant(
             description=assistant_data.description,
             instructions=assistant_data.instructions,
             model=assistant_data.model,
-            file_ids=json.dumps(tool_resources_file_ids)  # Save all files for assistant
+            file_ids=json.dumps(unique_file_ids),
+            thread_id=thread.id
         )
         db.add(db_assistant)
         db.commit()
@@ -148,8 +193,11 @@ async def create_assistant(
             description=db_assistant.description,
             instructions=db_assistant.instructions,
             model=db_assistant.model,
-            file_ids=assistant_data.file_ids,
-            tools={"web_search": False, "file_search": False, "code_interpreter": True, "computer_use": False}
+            file_ids=unique_file_ids,
+            thread_id=thread.id,
+            tools={"web_search": False, "file_search": False, "code_interpreter": True, "computer_use": False, "vector_store_ids": []},
+            conversation_count=0,
+            created_at=db_assistant.created_at.isoformat() if db_assistant.created_at else ""
         )
         
     except Exception as e:
@@ -196,32 +244,37 @@ async def update_assistant(
         if update_data:
             client.beta.assistants.update(assistant_id, **update_data)
         
-        # Update file IDs using MMACTEMP pattern
+        # Update file IDs by merging old and new lists
         if assistant_update.file_ids is not None:
-            # Deduplicate file IDs like MMACTEMP
-            unique_file_ids = list(set(assistant_update.file_ids)) if assistant_update.file_ids else []
-            tools = [{"type": "code_interpreter"}]  # Primary tool for files
+            # Get existing files and merge with new ones, ensuring no duplicates
+            existing_file_ids = json.loads(db_assistant.file_ids) if db_assistant.file_ids else []
+            updated_file_ids = list(set(existing_file_ids + assistant_update.file_ids))
             
-            # Update assistant with tool_resources (MMACTEMP pattern)
-            if unique_file_ids:
-                client.beta.assistants.update(
-                    assistant_id,
-                    tools=tools,
-                    tool_resources={
-                        "code_interpreter": {
-                            "file_ids": unique_file_ids
-                        }
+            tools = [{"type": "code_interpreter"}]
+
+            # Separate files by purpose for tool_resources
+            db_files = db.query(FileMetadata).filter(
+                FileMetadata.file_id.in_(updated_file_ids),
+                FileMetadata.uploaded_by == current_user.id
+            ).all()
+            
+            tool_resources_file_ids = [
+                f.file_id for f in db_files if f.purpose == 'assistants'
+            ]
+
+            # Update assistant with the complete list of tool files
+            client.beta.assistants.update(
+                assistant_id,
+                tools=tools,
+                tool_resources={
+                    "code_interpreter": {
+                        "file_ids": tool_resources_file_ids
                     }
-                )
-            else:
-                # Clear tool_resources if no files
-                client.beta.assistants.update(
-                    assistant_id,
-                    tools=tools,
-                    tool_resources={}
-                )
+                } if tool_resources_file_ids else {}
+            )
             
-            db_assistant.file_ids = json.dumps(unique_file_ids)
+            # Save the complete, merged list of all file IDs to the database
+            db_assistant.file_ids = json.dumps(updated_file_ids)
         
         db.commit()
         db.refresh(db_assistant)
@@ -234,7 +287,9 @@ async def update_assistant(
             instructions=db_assistant.instructions,
             model=db_assistant.model,
             file_ids=json.loads(db_assistant.file_ids) if db_assistant.file_ids else [],
-            tools={"web_search": False, "file_search": False, "code_interpreter": True, "computer_use": False}
+            tools={"web_search": False, "file_search": False, "code_interpreter": True, "computer_use": False, "vector_store_ids": []},
+            conversation_count=0,
+            created_at=db_assistant.created_at.isoformat() if db_assistant.created_at else ""
         )
         
     except Exception as e:
@@ -276,4 +331,104 @@ async def delete_assistant(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Failed to delete assistant: {str(e)}"
+        )
+
+@router.delete("/{assistant_id}/files/{file_id}")
+async def remove_file_from_assistant(
+    assistant_id: str,
+    file_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Detach and delete a file from an assistant and storage."""
+    print(f"DEBUG: Attempting to remove file {file_id} from assistant {assistant_id}")
+    
+    # Verify user owns the assistant
+    db_assistant = db.query(UserAssistant).filter(
+        UserAssistant.assistant_id == assistant_id,
+        UserAssistant.user_id == current_user.id
+    ).first()
+    if not db_assistant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assistant not found")
+
+    # Verify user owns the file metadata
+    db_file_meta = db.query(FileMetadata).filter(
+        FileMetadata.file_id == file_id,
+        FileMetadata.uploaded_by == current_user.id
+    ).first()
+    if not db_file_meta:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found in metadata")
+
+    try:
+        # Step 1: Update the assistant to remove the file association
+        current_file_ids = json.loads(db_assistant.file_ids) if db_assistant.file_ids else []
+        print(f"DEBUG: Current file_ids before removal: {current_file_ids}")
+        
+        if file_id in current_file_ids:
+            current_file_ids.remove(file_id)
+            print(f"DEBUG: File {file_id} removed from list. Remaining files: {current_file_ids}")
+            
+            # We still need to separate by purpose for the tool_resources update
+            db_files = db.query(FileMetadata).filter(
+                FileMetadata.file_id.in_(current_file_ids),
+                FileMetadata.uploaded_by == current_user.id
+            ).all()
+            tool_resources_file_ids = [f.file_id for f in db_files if f.purpose == 'assistants']
+            print(f"DEBUG: Files to keep in tool_resources: {tool_resources_file_ids}")
+
+            # Update OpenAI assistant's tool_resources
+            if tool_resources_file_ids:
+                print(f"DEBUG: Updating assistant with {len(tool_resources_file_ids)} files")
+                client.beta.assistants.update(
+                    assistant_id=assistant_id,
+                    tool_resources={"code_interpreter": {"file_ids": tool_resources_file_ids}}
+                )
+                print(f"DEBUG: Successfully updated assistant tool_resources")
+            else:
+                # When no files left, pass empty list explicitly
+                print(f"DEBUG: No files remaining, setting empty tool_resources")
+                client.beta.assistants.update(
+                    assistant_id=assistant_id,
+                    tool_resources={"code_interpreter": {"file_ids": []}}
+                )
+                print(f"DEBUG: Successfully cleared assistant tool_resources")
+            
+            # Update database
+            db_assistant.file_ids = json.dumps(current_file_ids)
+            print(f"DEBUG: Updated database file_ids to: {current_file_ids}")
+        else:
+            print(f"DEBUG: File {file_id} was not in assistant's file list")
+
+        # Step 2: Delete the file from OpenAI storage
+        try:
+            print(f"DEBUG: Attempting to delete file {file_id} from OpenAI storage")
+            client.files.delete(file_id)
+            print(f"DEBUG: Successfully deleted file {file_id} from OpenAI storage")
+        except openai.NotFoundError:
+            print(f"DEBUG: File {file_id} not found in OpenAI storage (already deleted or never existed)")
+            # If file is already deleted from OpenAI, we can proceed
+            pass
+        except Exception as e:
+            print(f"DEBUG: Error deleting file {file_id} from OpenAI: {str(e)}")
+            # Continue with database cleanup even if OpenAI delete fails
+            pass
+
+        # Step 3: Delete the file metadata from our database
+        print(f"DEBUG: Deleting file metadata for {file_id} from database")
+        db.delete(db_file_meta)
+        
+        print(f"DEBUG: Committing all database changes")
+        db.commit()
+        print(f"DEBUG: Database commit successful")
+        
+        print(f"DEBUG: File {file_id} removed successfully from assistant {assistant_id}")
+        return {"message": "File removed successfully"}
+
+    except Exception as e:
+        print(f"DEBUG: Exception occurred during file deletion: {str(e)}")
+        print(f"DEBUG: Rolling back database changes")
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred: {str(e)}"
         )

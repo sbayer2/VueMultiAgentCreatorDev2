@@ -24,6 +24,15 @@ export interface AuthResponse {
   token: string
 }
 
+// Assistant Tools Configuration
+export interface AssistantToolConfig {
+  web_search: boolean
+  file_search: boolean
+  code_interpreter: boolean
+  computer_use: boolean
+  vector_store_ids?: string[]
+}
+
 // Primary Assistant types (Assistants API)
 export interface Assistant {
   id: number
@@ -33,6 +42,10 @@ export interface Assistant {
   instructions: string
   model: string
   file_ids: string[]
+  thread_id?: string
+  tools: AssistantToolConfig
+  conversation_count: number
+  created_at: string
 }
 
 export interface CreateAssistantData {
@@ -49,6 +62,7 @@ export interface UpdateAssistantData {
   instructions?: string
   model?: string
   file_ids?: string[]
+  tools?: AssistantToolConfig
 }
 
 // Legacy Assistant types (for migration)
