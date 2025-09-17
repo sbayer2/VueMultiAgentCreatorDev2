@@ -198,7 +198,7 @@
             </p>
           </div>
           <router-link
-            :to="`/chat`"
+            :to="`/dashboard/chat`"
             class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -303,8 +303,10 @@ const hasChanges = computed(() => {
 
 // Methods
 const loadAssistant = async () => {
+  console.log('DEBUG: loadAssistant called', { assistantId: assistantId.value })
   if (!assistantId.value) {
     loadError.value = 'Invalid assistant ID'
+    console.log('DEBUG: No assistant ID found')
     return
   }
 
@@ -312,6 +314,7 @@ const loadAssistant = async () => {
   loadError.value = null
 
   try {
+    console.log('DEBUG: Calling fetchAssistant', assistantId.value)
     const result = await assistantsStore.fetchAssistant(assistantId.value)
     
     if (result.success && result.data) {
@@ -388,6 +391,7 @@ const formatDate = (dateString: string) => {
 
 // Initialize
 onMounted(() => {
+  console.log('DEBUG: AssistantEditView mounted', { assistantId: assistantId.value, routeParams: route.params })
   loadAssistant()
 })
 
