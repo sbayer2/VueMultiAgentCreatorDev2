@@ -24,12 +24,10 @@ export interface AuthResponse {
   token: string
 }
 
-// Assistant Tools Configuration
+// Assistant Tools Configuration (OpenAI Assistants Beta v2)
 export interface AssistantToolConfig {
-  web_search: boolean
   file_search: boolean
   code_interpreter: boolean
-  computer_use: boolean
   vector_store_ids?: string[]
 }
 

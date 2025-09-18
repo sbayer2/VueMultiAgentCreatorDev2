@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     INSTANCE_CONNECTION_NAME: Optional[str] = None
     
     # JWT
-    SECRET_KEY: str
+    SECRET_KEY: str = "development-secret-key-change-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     

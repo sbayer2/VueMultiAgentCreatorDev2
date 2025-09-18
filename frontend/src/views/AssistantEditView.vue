@@ -249,7 +249,8 @@ const {
   errors,
   isSubmitting: isLoading,
   validateAllFields: validate,
-  reset: resetFormData
+  reset: resetFormData,
+  setFieldValue
 } = useForm<UpdateAssistantData>({
   initialValues: {
     name: '',
@@ -257,34 +258,37 @@ const {
     instructions: '',
     model: 'gpt-4o-mini',
     tools: {
-      web_search: false,
       file_search: false,
       code_interpreter: false,
-      computer_use: false,
       vector_store_ids: []
     }
   },
   rules: {
-    name: (value: string) => {
+    name: [(value: string) => {
       if (!value?.trim()) return 'Assistant name is required'
       if (value.length < 2) return 'Name must be at least 2 characters'
       if (value.length > 100) return 'Name cannot exceed 100 characters'
-      return null
-    },
-    model: (value: string) => {
+      return true
+    }],
+    model: [(value: string) => {
       if (!value) return 'Please select a model'
-      return null
-    },
-    instructions: (value: string) => {
+      return true
+    }],
+    instructions: [(value: string) => {
       if (!value?.trim()) return 'Instructions are required'
       if (value.length < 10) return 'Instructions must be at least 10 characters'
       if (value.length > 32000) return 'Instructions cannot exceed 32,000 characters'
-      return null
-    },
-    description: (value?: string) => {
+      return true
+    }],
+    description: [(value?: string) => {
       if (value && value.length > 500) return 'Description cannot exceed 500 characters'
-      return null
-    }
+      return true
+    }],
+    tools: [(value: any) => {
+      // Tools validation - just ensure it's an object
+      if (!value || typeof value !== 'object') return 'Invalid tools configuration'
+      return true
+    }]
   }
 })
 
@@ -318,8 +322,9 @@ const loadAssistant = async () => {
     const result = await assistantsStore.fetchAssistant(assistantId.value)
     
     if (result.success && result.data) {
+      console.log('DEBUG: Assistant data received:', result.data)
       assistant.value = result.data
-      
+
       // Populate form with assistant data
       const assistantData: UpdateAssistantData = {
         name: result.data.name,
@@ -328,12 +333,20 @@ const loadAssistant = async () => {
         model: result.data.model,
         tools: result.data.tools
       }
-      
+
+      console.log('DEBUG: Prepared assistantData for form:', assistantData)
+
       // Store original data for change detection
       originalData.value = JSON.parse(JSON.stringify(assistantData))
-      
-      // Update form
-      Object.assign(form, assistantData)
+
+      // Update form using setFieldValue
+      console.log('DEBUG: Form before assignment:', form.value)
+      setFieldValue('name', assistantData.name)
+      setFieldValue('description', assistantData.description)
+      setFieldValue('instructions', assistantData.instructions)
+      setFieldValue('model', assistantData.model)
+      setFieldValue('tools', assistantData.tools)
+      console.log('DEBUG: Form after assignment:', form.value)
     } else {
       loadError.value = result.error || 'Failed to load assistant'
     }
@@ -353,16 +366,39 @@ const resetForm = () => {
 }
 
 const handleSubmit = async () => {
-  if (!validate() || !assistantId.value || !hasChanges.value) return
+  console.log('DEBUG: handleSubmit called')
+  console.log('DEBUG: assistantId:', assistantId.value)
+  console.log('DEBUG: hasChanges:', hasChanges.value)
+  console.log('DEBUG: form.value:', form.value)
 
-  const result = await assistantsStore.updateAssistant(assistantId.value, form)
-  
-  if (result.success) {
-    // Update original data to reflect saved state
-    originalData.value = JSON.parse(JSON.stringify(form))
-    
-    // Navigate back to assistants list
-    router.push('/dashboard/assistants')
+  try {
+    console.log('DEBUG: Calling validate()')
+    console.log('DEBUG: Form errors before validation:', errors.value)
+    const isValid = validate()
+    console.log('DEBUG: Validation result:', isValid)
+    console.log('DEBUG: Form errors after validation:', errors.value)
+
+    if (!isValid || !assistantId.value || !hasChanges.value) {
+      console.log('DEBUG: Validation failed or no changes')
+      console.log('DEBUG: isValid:', isValid, 'assistantId:', assistantId.value, 'hasChanges:', hasChanges.value)
+      return
+    }
+
+    console.log('DEBUG: Calling updateAssistant with:', assistantId.value, form.value)
+    const result = await assistantsStore.updateAssistant(assistantId.value, form.value)
+    console.log('DEBUG: Update result:', result)
+
+    if (result.success) {
+      // Update original data to reflect saved state
+      originalData.value = JSON.parse(JSON.stringify(form.value))
+
+      // Navigate back to assistants list
+      router.push('/dashboard/assistants')
+    } else {
+      console.error('DEBUG: Update failed:', result.error)
+    }
+  } catch (error) {
+    console.error('DEBUG: Exception in handleSubmit:', error)
   }
 }
 

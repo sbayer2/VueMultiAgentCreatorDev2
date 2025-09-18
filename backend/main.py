@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 
-from api import auth, assistants, threads, files, chat, responses_assistants, responses_chat
+from api import auth, assistants, threads, files, chat, dashboard, profile
 from models.database import init_db
 from utils.config import settings
 
@@ -68,10 +68,10 @@ app.include_router(assistants.router, prefix="/api/assistants", tags=["assistant
 app.include_router(threads.router, prefix="/api/threads", tags=["threads"])
 app.include_router(files.router, prefix="/api/files", tags=["files"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
+app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
+app.include_router(profile.router, prefix="/api", tags=["profile"])
 
-# Experimental Responses API (Future Migration)
-app.include_router(responses_assistants.router, prefix="/api/experimental/assistants", tags=["experimental-assistants"])
-app.include_router(responses_chat.router, prefix="/api/experimental/chat", tags=["experimental-chat"])
+
 
 @app.get("/")
 async def root():

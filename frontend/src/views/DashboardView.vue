@@ -15,23 +15,8 @@
           <dt class="text-sm font-medium text-gray-500 truncate">
             {{ stat.name }}
           </dt>
-          <dd class="mt-1 flex items-baseline justify-between md:block lg:flex">
-            <div class="flex items-baseline text-2xl font-semibold text-primary-600">
-              {{ stat.value }}
-            </div>
-            <div
-              :class="[
-                stat.changeType === 'increase' ? 'text-green-600' : 'text-red-600',
-                'ml-2 flex items-baseline text-sm font-semibold'
-              ]"
-            >
-              <component
-                :is="stat.changeType === 'increase' ? ArrowUpIcon : ArrowDownIcon"
-                class="h-4 w-4 flex-shrink-0 self-center"
-                aria-hidden="true"
-              />
-              <span class="ml-1">{{ stat.change }}</span>
-            </div>
+          <dd class="mt-1 text-2xl font-semibold text-primary-600">
+            {{ stat.value }}
           </dd>
         </div>
       </div>
@@ -92,51 +77,53 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import { useAssistantsStore } from '@/stores/assistants'
-import { useConversationsStore } from '@/stores/conversations'
 import { formatDate } from '@/utils/formatters'
+import { apiClient } from '@/utils/api'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { 
-  ArrowUpIcon, 
-  ArrowDownIcon,
   PlusIcon,
   ChatBubbleLeftRightIcon,
   CogIcon,
 } from '@heroicons/vue/24/outline'
+import type { ApiError } from '@/types'
+
+interface DashboardStats {
+  totalAssistants: number;
+  activeChats: number;
+  messagesToday: number;
+  apiUsage: string;
+}
+
+interface Activity {
+  id: string;
+  title: string;
+  description: string;
+  timestamp: string;
+}
 
 const authStore = useAuthStore()
-const assistantsStore = useAssistantsStore()
-const conversationsStore = useConversationsStore()
-
 const isLoading = ref(true)
-const recentActivity = ref<any[]>([])
+const error = ref<ApiError | null>(null)
+const dashboardData = ref<{ stats: DashboardStats; recentActivity: Activity[] } | null>(null)
 
-const stats = computed(() => [
-  {
-    name: 'Total Assistants',
-    value: assistantsStore.assistantsCount,
-    change: '+10%',
-    changeType: 'increase',
-  },
-  {
-    name: 'Active Chats',
-    value: conversationsStore.conversationsCount,
-    change: '+5%',
-    changeType: 'increase',
-  },
-  {
-    name: 'Messages Today',
-    value: '127',
-    change: '-3%',
-    changeType: 'decrease',
-  },
-  {
-    name: 'API Usage',
-    value: '89%',
-    change: '+12%',
-    changeType: 'increase',
-  },
-])
+const stats = computed(() => {
+  if (!dashboardData.value) {
+    return [
+      { name: 'Total Assistants', value: '...' },
+      { name: 'Active Chats', value: '...' },
+      { name: 'Messages Today', value: '...' },
+      { name: 'API Usage', value: '...' },
+    ]
+  }
+  return [
+    { name: 'Total Assistants', value: dashboardData.value.stats.totalAssistants },
+    { name: 'Active Chats', value: dashboardData.value.stats.activeChats },
+    { name: 'Messages Today', value: dashboardData.value.stats.messagesToday },
+    { name: 'API Usage', value: dashboardData.value.stats.apiUsage },
+  ]
+})
+
+const recentActivity = computed(() => dashboardData.value?.recentActivity || [])
 
 const quickActions = [
   {
@@ -159,41 +146,18 @@ const quickActions = [
   },
 ]
 
-onMounted(async () => {
-  try {
-    // Fetch initial data
-    await Promise.all([
-      assistantsStore.fetchAssistants(),
-      conversationsStore.fetchConversations(),
-    ])
-    
-    // Simulate fetching recent activity
-    setTimeout(() => {
-      recentActivity.value = [
-        {
-          id: '1',
-          title: 'New assistant created',
-          description: 'Created "Customer Support Bot" assistant',
-          timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-        },
-        {
-          id: '2',
-          title: 'Chat session started',
-          description: 'Started conversation with "Sales Assistant"',
-          timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-        },
-        {
-          id: '3',
-          title: 'Profile updated',
-          description: 'Changed notification preferences',
-          timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-        },
-      ]
-      isLoading.value = false
-    }, 1000)
-  } catch (error) {
-    console.error('Error loading dashboard data:', error)
-    isLoading.value = false
+async function fetchDashboardData() {
+  isLoading.value = true
+  error.value = null
+  const response = await apiClient.get<{ stats: DashboardStats; recentActivity: Activity[] }>('/dashboard/stats')
+  if (response.success) {
+    dashboardData.value = response.data
+  } else {
+    error.value = response.error
+    console.error('Error loading dashboard data:', response.error)
   }
-})
+  isLoading.value = false
+}
+
+onMounted(fetchDashboardData);
 </script>

@@ -2,6 +2,7 @@
 import os
 import io
 import uuid
+import json
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Response
 from sqlalchemy.orm import Session
@@ -10,7 +11,7 @@ from openai import OpenAI
 from PIL import Image
 import base64
 
-from models.database import get_db, User, FileMetadata
+from models.database import get_db, User, FileMetadata, UserAssistant
 from api.auth import get_current_user
 from utils.config import settings
 
@@ -49,148 +50,13 @@ class ImageAttachmentResponse(BaseModel):
     height: Optional[int] = None
     uploaded_at: str
 
-@router.post("/upload", response_model=ImageAttachmentResponse)
-async def upload_image(
-    file: UploadFile = File(...),
-    purpose: Optional[str] = Form(None),  # Use Form to properly receive FormData
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Upload image file with vision support"""
-    # Log received parameters
-    received_purpose = purpose
-    file_extension = file.filename.split('.')[-1].lower() if file.filename else ''
-    
-    # MMACTEMP Pattern: Determine purpose by file extension if not provided
-    if purpose is None or purpose == "":
-        if file_extension in ['jpg', 'jpeg', 'png', 'webp', 'gif']:
-            purpose = 'vision'
-        else:
-            purpose = 'assistants'
-    
-    # Log for debugging
-    print(f"File upload: {file.filename}, received purpose: {received_purpose}, final purpose: {purpose}")
-    print(f"File extension: {file_extension}, content_type: {file.content_type}")
-    
-    # Validate file type
-    if not file.content_type or file.content_type not in SUPPORTED_IMAGE_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported file type. Supported types: {', '.join(SUPPORTED_IMAGE_TYPES)}"
-        )
-    
-    # Read file contents
-    contents = await file.read()
-    file_size = len(contents)
-    
-    # Validate file size (10MB limit for images)
-    max_size = 10 * 1024 * 1024  # 10MB
-    if file_size > max_size:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="Image size exceeds 10MB limit"
-        )
-    
-    try:
-        # Process image to get dimensions and create preview
-        image_info = await process_image(contents, file.content_type)
-        
-        # Create temporary file-like object for OpenAI upload
-        file_obj = io.BytesIO(contents)
-        file_obj.name = file.filename or f"image_{uuid.uuid4().hex}.jpg"
-        
-        # Upload to OpenAI Files API
-        openai_file = client.files.create(
-            file=file_obj,
-            purpose=purpose
-        )
-        
-        # Generate unique ID for our system
-        attachment_id = str(uuid.uuid4())
-        
-        # Save metadata to database with image-specific fields
-        from datetime import datetime
-        
-        # Limit filename length to prevent MySQL errors
-        safe_filename = (file.filename or file_obj.name)[:250] if (file.filename or file_obj.name) else f"image_{uuid.uuid4()}.png"
-        
-        # Limit preview data size to prevent MySQL errors
-        preview_data = image_info.get('preview_base64')
-        if preview_data and len(preview_data) > 50000:  # Limit to ~50KB
-            print(f"Warning: Preview data too large ({len(preview_data)} chars), skipping preview")
-            preview_data = None
-        
-        db_file = FileMetadata(
-            file_id=openai_file.id,
-            original_name=safe_filename,
-            size=file_size,
-            mime_type=file.content_type,
-            purpose=purpose,
-            uploaded_by=current_user.id,
-            width=image_info.get('width'),
-            height=image_info.get('height'),
-            preview_data=preview_data
-        )
-        db.add(db_file)
-        db.commit()
-        db.refresh(db_file)
-        
-        # Build response
-        return ImageAttachmentResponse(
-            id=attachment_id,
-            file_id=openai_file.id,
-            name=file.filename or file_obj.name,
-            size=file_size,
-            type=file.content_type,
-            url=f"/api/files/{openai_file.id}/content",
-            preview_url=f"/api/files/{openai_file.id}/preview" if image_info.get('preview_base64') else None,
-            width=image_info.get('width'),
-            height=image_info.get('height'),
-            uploaded_at=datetime.utcnow().isoformat()
-        )
-        
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to upload image: {str(e)}"
-        )
 
-async def process_image(contents: bytes, content_type: str) -> dict:
-    """Process image to extract metadata and create preview"""
-    try:
-        # Open image with PIL
-        image = Image.open(io.BytesIO(contents))
-        
-        # Get dimensions
-        width, height = image.size
-        
-        # Create thumbnail for preview (max 200x200)
-        thumbnail = image.copy()
-        thumbnail.thumbnail((200, 200), Image.Resampling.LANCZOS)
-        
-        # Convert thumbnail to base64 for storage
-        thumbnail_buffer = io.BytesIO()
-        thumbnail_format = 'JPEG' if content_type in ['image/jpeg', 'image/jpg'] else 'PNG'
-        thumbnail.save(thumbnail_buffer, format=thumbnail_format, quality=85)
-        thumbnail_base64 = base64.b64encode(thumbnail_buffer.getvalue()).decode('utf-8')
-        
-        return {
-            'width': width,
-            'height': height,
-            'preview_base64': f"data:{content_type};base64,{thumbnail_base64}"
-        }
-        
-    except Exception as e:
-        print(f"Image processing error: {e}")
-        # For vision files, we can still proceed without image processing metadata
-        print(f"Proceeding with upload despite image processing error")
-        return {'width': None, 'height': None, 'preview_base64': None}
 
 @router.post("/upload-for-assistant", response_model=FileResponse)
 async def upload_file_for_assistant(
     file: UploadFile = File(...),
     purpose: Optional[str] = Form(None),  # Accept purpose from frontend
+    assistant_id: Optional[str] = Form(None),  # Assistant to attach file to
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -210,7 +76,7 @@ async def upload_file_for_assistant(
         purpose = "vision" if is_image else "assistants"
     
     # Log for debugging
-    print(f"Assistant file upload: {file.filename}, purpose: {purpose}, content_type: {file.content_type}")
+    print(f"DEBUG: Assistant file upload - filename: {file.filename}, purpose: {purpose}, content_type: {file.content_type}, assistant_id: {assistant_id}")
     
     # Read file contents
     contents = await file.read()
@@ -229,11 +95,12 @@ async def upload_file_for_assistant(
         file_obj = io.BytesIO(contents)
         file_obj.name = file.filename or f"file_{uuid.uuid4().hex}"
         
-        # Upload to OpenAI Files API
+        # Upload to OpenAI Files API (use 'assistants' purpose for OpenAI API compatibility)
         openai_file = client.files.create(
             file=file_obj,
-            purpose=purpose
+            purpose='assistants'  # OpenAI API only accepts 'assistants' or 'fine-tune'
         )
+        print(f"DEBUG: File uploaded to OpenAI - file_id: {openai_file.id}, filename: {openai_file.filename}")
         
         # Save metadata to database (minimal metadata for assistant files)
         db_file = FileMetadata(
@@ -246,6 +113,50 @@ async def upload_file_for_assistant(
         )
         db.add(db_file)
         db.commit()
+        
+        # If assistant_id provided and file purpose is 'assistants', attach to assistant
+        if assistant_id and purpose == 'assistants':
+            try:
+                # Verify user owns the assistant
+                db_assistant = db.query(UserAssistant).filter(
+                    UserAssistant.assistant_id == assistant_id,
+                    UserAssistant.user_id == current_user.id
+                ).first()
+                
+                if db_assistant:
+                    # Get current assistant file_ids from OpenAI
+                    openai_assistant = client.beta.assistants.retrieve(assistant_id)
+                    current_openai_file_ids = []
+                    if (hasattr(openai_assistant, 'tool_resources') and openai_assistant.tool_resources and 
+                        hasattr(openai_assistant.tool_resources, 'code_interpreter') and 
+                        openai_assistant.tool_resources.code_interpreter and
+                        hasattr(openai_assistant.tool_resources.code_interpreter, 'file_ids')):
+                        current_openai_file_ids = openai_assistant.tool_resources.code_interpreter.file_ids or []
+                    
+                    # Add new file to OpenAI assistant if not already there
+                    if openai_file.id not in current_openai_file_ids:
+                        updated_file_ids = current_openai_file_ids + [openai_file.id]
+                        client.beta.assistants.update(
+                            assistant_id=assistant_id,
+                            tool_resources={"code_interpreter": {"file_ids": updated_file_ids}}
+                        )
+                        
+                        # Update database to track the new file
+                        db_file_ids = json.loads(db_assistant.file_ids) if db_assistant.file_ids else []
+                        if openai_file.id not in db_file_ids:
+                            updated_db_file_ids = db_file_ids + [openai_file.id]
+                            db_assistant.file_ids = json.dumps(updated_db_file_ids)
+                            db.commit()
+                        
+                        print(f"DEBUG: Attached file {openai_file.id} to assistant {assistant_id}")
+                    else:
+                        print(f"DEBUG: File {openai_file.id} already attached to assistant {assistant_id}")
+                else:
+                    print(f"DEBUG: Assistant {assistant_id} not found or not owned by user")
+                    
+            except Exception as e:
+                print(f"DEBUG: Failed to attach file to assistant: {str(e)}")
+                # Don't fail the upload if assistant attachment fails
         
         return FileResponse(
             file_id=openai_file.id,
@@ -354,6 +265,34 @@ async def get_files_by_purpose(
         result[file.purpose][file.file_id] = file.original_name
     
     return result
+
+class FileDetailsRequest(BaseModel):
+    file_ids: List[str]
+
+@router.post("/details", response_model=List[FileResponse])
+async def get_file_details(
+    request: FileDetailsRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get details for a specific list of file IDs."""
+    if not request.file_ids:
+        return []
+    
+    files = db.query(FileMetadata).filter(
+        FileMetadata.file_id.in_(request.file_ids),
+        FileMetadata.uploaded_by == current_user.id
+    ).all()
+    
+    return [
+        FileResponse(
+            file_id=f.file_id,
+            filename=f.original_name,
+            size=f.size,
+            purpose=f.purpose
+        )
+        for f in files
+    ]
 
 @router.get("/{file_id}/content")
 async def get_file_content(

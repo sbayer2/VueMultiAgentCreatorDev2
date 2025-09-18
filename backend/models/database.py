@@ -20,63 +20,7 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
-    assistants = relationship("Assistant", back_populates="user", cascade="all, delete-orphan")
     legacy_assistants = relationship("UserAssistant", back_populates="user", cascade="all, delete-orphan")
-    conversations = relationship("Conversation", cascade="all, delete-orphan")
-
-class Assistant(Base):
-    """Modern assistant configuration for Responses API"""
-    __tablename__ = "assistants"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    name = Column(String(255), nullable=False)
-    description = Column(Text, nullable=True)
-    instructions = Column(Text, nullable=False)
-    model = Column(String(50), default="gpt-4o-mini")
-    tools_config = Column(Text, nullable=True)  # JSON string for built-in tools
-    vector_store_ids = Column(Text, nullable=True)  # JSON array for file search
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
-    # Relationships
-    user = relationship("User", back_populates="assistants")
-    conversations = relationship("Conversation", back_populates="assistant", cascade="all, delete-orphan")
-
-class Conversation(Base):
-    """Conversation sessions using Responses API"""
-    __tablename__ = "conversations"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    assistant_id = Column(Integer, ForeignKey("assistants.id"), nullable=False)
-    title = Column(String(255), nullable=True)
-    last_response_id = Column(String(255), nullable=True)  # For conversation continuity
-    message_count = Column(Integer, default=0)  # Track conversation length for cost management
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
-    # Relationships
-    user = relationship("User")
-    assistant = relationship("Assistant", back_populates="conversations")
-    messages = relationship("ConversationMessage", back_populates="conversation", cascade="all, delete-orphan")
-
-class ConversationMessage(Base):
-    """Individual messages in conversations"""
-    __tablename__ = "conversation_messages"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False)
-    response_id = Column(String(255), nullable=True, index=True)  # OpenAI response ID
-    role = Column(String(20), nullable=False)  # user, assistant, system
-    content = Column(Text, nullable=False)
-    tool_calls = Column(Text, nullable=True)  # JSON string for tool usage
-    attachments = Column(Text, nullable=True)  # JSON string for image attachments
-    tokens_used = Column(Integer, nullable=True)  # Track token usage
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    # Relationships
-    conversation = relationship("Conversation", back_populates="messages")
 
 # Legacy table for backwards compatibility during migration
 class UserAssistant(Base):
@@ -115,6 +59,61 @@ class FileMetadata(Base):
     
     # Relationships
     uploader = relationship("User")
+
+# Modern database models for Responses API (required by auth.py imports)
+class Assistant(Base):
+    __tablename__ = "assistants"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    assistant_id = Column(String(255), unique=True, index=True, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    instructions = Column(Text, nullable=True)
+    model = Column(String(50), default="gpt-4o")
+    tools = Column(Text, nullable=True)  # JSON string
+    tool_resources = Column(Text, nullable=True)  # JSON string
+    assistant_metadata = Column(Text, nullable=True)  # JSON string
+    temperature = Column(String(10), nullable=True)
+    top_p = Column(String(10), nullable=True)
+    response_format = Column(String(50), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    owner = relationship("User")
+    conversations = relationship("Conversation", back_populates="assistant", cascade="all, delete-orphan")
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    assistant_id = Column(Integer, ForeignKey("assistants.id"), nullable=False)
+    title = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    user = relationship("User")
+    assistant = relationship("Assistant", back_populates="conversations")
+    messages = relationship("ConversationMessage", back_populates="conversation", cascade="all, delete-orphan")
+
+class ConversationMessage(Base):
+    __tablename__ = "conversation_messages"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False)
+    message_id = Column(String(255), nullable=True)  # OpenAI message ID
+    role = Column(String(50), nullable=False)  # user, assistant, system
+    content = Column(Text, nullable=False)
+    attachments = Column(Text, nullable=True)  # JSON string for file attachments
+    message_metadata = Column(Text, nullable=True)  # JSON string
+    token_count = Column(Integer, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    conversation = relationship("Conversation", back_populates="messages")
 
 def get_database_url():
     """Get database URL based on environment"""

@@ -35,8 +35,8 @@
       <!-- Message Content -->
       <div class="space-y-2">
         <!-- Image Attachments -->
-        <div v-if="message.attachments && message.attachments.length > 0" class="mb-2">
-          <ImageDisplay :images="message.attachments" :maxWidth="300" :maxHeight="200" />
+        <div v-if="imageAttachments.length > 0" class="mb-2">
+          <ImageDisplay :images="imageAttachments" :maxWidth="300" :maxHeight="200" />
         </div>
         
         <!-- Text Content -->
@@ -46,6 +46,17 @@
             <span class="inline-block w-1 h-4 bg-current animate-pulse ml-1"></span>
           </div>
           <div v-else class="message-content" v-html="renderContent(message.content)"></div>
+        </div>
+
+        <!-- Non-Image File Attachments -->
+        <div v-if="nonImageAttachments.length > 0" class="mt-2 border-t pt-2">
+          <p class="text-xs font-medium text-gray-500 mb-1">Referenced Files:</p>
+          <div class="space-y-1">
+            <div v-for="file in nonImageAttachments" :key="file.id" class="flex items-center space-x-2">
+              <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+              <span class="text-xs text-gray-600 truncate">{{ file.name }}</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -93,6 +104,15 @@ const props = defineProps<{
   isStreaming?: boolean
   streamingContent?: string
 }>()
+
+const imageAttachments = computed(() => 
+  props.message.attachments?.filter(att => att.type.startsWith('image/')) ?? []
+);
+
+const nonImageAttachments = computed(() => 
+  props.message.attachments?.filter(att => !att.type.startsWith('image/')) ?? []
+);
+
 
 // Configure marked with syntax highlighting
 marked.setOptions({

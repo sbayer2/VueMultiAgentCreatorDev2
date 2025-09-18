@@ -49,7 +49,7 @@ class AssistantResponse(BaseModel):
     model: str
     file_ids: List[str]
     thread_id: Optional[str] = None
-    tools: dict = {"web_search": False, "file_search": False, "code_interpreter": True, "computer_use": False}
+    tools: dict = {"file_search": False, "code_interpreter": True}
     conversation_count: int = 0
     created_at: str
     updated_at: Optional[str] = None
@@ -101,7 +101,7 @@ async def list_assistants(
             model=a.model,
             file_ids=actual_file_ids,
             thread_id=a.thread_id,
-            tools={"web_search": False, "file_search": False, "code_interpreter": True, "computer_use": False, "vector_store_ids": []},
+            tools={"file_search": False, "code_interpreter": True, "vector_store_ids": []},
             conversation_count=0,  # TODO: Implement actual conversation counting
             created_at=a.created_at.isoformat() if a.created_at else ""
         ))
@@ -137,19 +137,17 @@ async def get_assistant(
                 if hasattr(openai_assistant.tool_resources.file_search, 'vector_store_ids'):
                     vector_store_ids = openai_assistant.tool_resources.file_search.vector_store_ids or []
 
-        # Map OpenAI tools to our format
+        # Map OpenAI tools to our format (only valid Assistants Beta v2 tools)
         tools_config = {
-            "web_search": False,  # Not in current OpenAI tools
             "file_search": any(tool.type == 'file_search' for tool in (openai_assistant.tools or [])),
             "code_interpreter": any(tool.type == 'code_interpreter' for tool in (openai_assistant.tools or [])),
-            "computer_use": False,  # Not in current OpenAI tools
             "vector_store_ids": vector_store_ids
         }
 
     except Exception as e:
         print(f"DEBUG: Failed to get OpenAI assistant {assistant_id}: {e}")
-        # Fallback to default tools config
-        tools_config = {"web_search": False, "file_search": False, "code_interpreter": True, "computer_use": False, "vector_store_ids": []}
+        # Fallback to default tools config (only valid Assistants Beta v2 tools)
+        tools_config = {"file_search": False, "code_interpreter": True, "vector_store_ids": []}
 
     return AssistantResponse(
         id=db_assistant.id,
@@ -222,7 +220,7 @@ async def create_assistant(
             model=db_assistant.model,
             file_ids=unique_file_ids,
             thread_id=thread.id,
-            tools={"web_search": False, "file_search": False, "code_interpreter": True, "computer_use": False, "vector_store_ids": []},
+            tools={"file_search": False, "code_interpreter": True, "vector_store_ids": []},
             conversation_count=0,
             created_at=db_assistant.created_at.isoformat() if db_assistant.created_at else ""
         )
@@ -314,7 +312,7 @@ async def update_assistant(
             instructions=db_assistant.instructions,
             model=db_assistant.model,
             file_ids=json.loads(db_assistant.file_ids) if db_assistant.file_ids else [],
-            tools={"web_search": False, "file_search": False, "code_interpreter": True, "computer_use": False, "vector_store_ids": []},
+            tools={"file_search": False, "code_interpreter": True, "vector_store_ids": []},
             conversation_count=0,
             created_at=db_assistant.created_at.isoformat() if db_assistant.created_at else ""
         )

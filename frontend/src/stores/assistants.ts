@@ -21,6 +21,18 @@ export const useAssistantsStore = defineStore('assistants', () => {
     assistants.value.find(a => a.assistant_id === assistant_id)
   )
 
+  const getAssistantFileDetails = computed(() => {
+    return (assistant: Assistant | null) => {
+      if (!assistant || !assistant.file_ids) {
+        return [];
+      }
+      // This is a placeholder. We need a central place to get file metadata.
+      // For now, we'll just return objects with file_id.
+      // TODO: Create a file metadata store.
+      return assistant.file_ids.map(id => ({ file_id: id, original_name: `File ${id.slice(-6)}` }));
+    };
+  });
+
   // Actions
   const fetchAssistants = async () => {
     isLoading.value = true
@@ -51,16 +63,16 @@ export const useAssistantsStore = defineStore('assistants', () => {
 
     try {
       const response = await apiClient.get<Assistant>(`/assistants/${assistant_id}`)
-      
+
       if (response.success && response.data) {
         currentAssistant.value = response.data
-        
+
         // Update in list if exists
         const index = assistants.value.findIndex(a => a.assistant_id === assistant_id)
         if (index !== -1) {
           assistants.value[index] = response.data
         }
-        
+
         return { success: true, data: response.data }
       } else {
         error.value = response.error?.message || 'Failed to fetch assistant'
@@ -157,6 +169,26 @@ export const useAssistantsStore = defineStore('assistants', () => {
     }
   }
 
+  const removeFileFromAssistant = async (assistantId: string, fileId: string) => {
+    isLoading.value = true;
+    error.value = null;
+    try {
+      const response = await apiClient.delete(`/assistants/${assistantId}/files/${fileId}`);
+      if (response.success) {
+        await fetchAssistant(assistantId);
+        return { success: true };
+      } else {
+        error.value = response.error?.message || 'Failed to remove file';
+        return { success: false, error: error.value };
+      }
+    } catch (err: any) {
+      error.value = err.message || 'An unexpected error occurred';
+      return { success: false, error: error.value };
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
   const clearError = () => {
     error.value = null
   }
@@ -191,5 +223,7 @@ export const useAssistantsStore = defineStore('assistants', () => {
     deleteAssistant,
     clearError,
     resetState,
+    removeFileFromAssistant,
   }
 })
+

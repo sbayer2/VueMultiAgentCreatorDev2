@@ -84,10 +84,16 @@
     </TransitionRoot>
 
     <!-- Desktop sidebar -->
-    <div class="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-72 lg:flex-col">
-      <div class="flex grow flex-col gap-y-5 overflow-y-auto border-r border-gray-200 bg-white px-6 pb-4">
-        <div class="flex h-16 shrink-0 items-center">
-          <h1 class="text-xl font-bold text-primary-600">Multi-Agent Creator</h1>
+    <div
+      :class="[
+        'hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:flex-col transition-all duration-300',
+        sidebarCollapsed ? 'lg:w-16' : 'lg:w-72'
+      ]"
+    >
+      <div :class="['flex grow flex-col gap-y-5 overflow-y-auto border-r border-gray-200 bg-white pb-4', sidebarCollapsed ? 'px-3' : 'px-6']">
+        <div class="flex h-16 shrink-0 items-center justify-center">
+          <h1 v-if="!sidebarCollapsed" class="text-xl font-bold text-primary-600">Multi-Agent Creator</h1>
+          <span v-else class="text-lg font-bold text-primary-600" title="Multi-Agent Creator">M</span>
         </div>
         <nav class="flex flex-1 flex-col">
           <ul role="list" class="flex flex-1 flex-col gap-y-7">
@@ -100,8 +106,10 @@
                       isActiveRoute(item.href)
                         ? 'bg-gray-50 text-primary-600'
                         : 'text-gray-700 hover:text-primary-600 hover:bg-gray-50',
-                      'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold'
+                      'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold',
+                      sidebarCollapsed ? 'justify-center' : ''
                     ]"
+                    :title="sidebarCollapsed ? item.name : ''"
                   >
                     <component
                       :is="item.icon"
@@ -111,7 +119,7 @@
                       ]"
                       aria-hidden="true"
                     />
-                    {{ item.name }}
+                    <span v-if="!sidebarCollapsed">{{ item.name }}</span>
                   </RouterLink>
                 </li>
               </ul>
@@ -119,13 +127,17 @@
             <li class="mt-auto">
               <button
                 @click="handleLogout"
-                class="group -mx-2 flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 text-gray-700 hover:bg-gray-50 hover:text-primary-600 w-full"
+                :class="[
+                  'group -mx-2 flex gap-x-3 rounded-md p-2 text-sm font-semibold leading-6 text-gray-700 hover:bg-gray-50 hover:text-primary-600 w-full',
+                  sidebarCollapsed ? 'justify-center' : ''
+                ]"
+                :title="sidebarCollapsed ? 'Logout' : ''"
               >
                 <ArrowLeftOnRectangleIcon
                   class="h-6 w-6 shrink-0 text-gray-400 group-hover:text-primary-600"
                   aria-hidden="true"
                 />
-                Logout
+                <span v-if="!sidebarCollapsed">Logout</span>
               </button>
             </li>
           </ul>
@@ -134,7 +146,7 @@
     </div>
 
     <!-- Main content -->
-    <div class="lg:pl-72">
+    <div :class="['transition-all duration-300', sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-72']">
       <!-- Top bar -->
       <div class="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
         <button
@@ -143,6 +155,17 @@
           @click="sidebarOpen = true"
         >
           <span class="sr-only">Open sidebar</span>
+          <Bars3Icon class="h-6 w-6" aria-hidden="true" />
+        </button>
+
+        <!-- Desktop sidebar toggle -->
+        <button
+          type="button"
+          class="hidden lg:block -m-2.5 p-2.5 text-gray-700 hover:text-primary-600 transition-colors"
+          @click="toggleSidebar"
+          :title="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+        >
+          <span class="sr-only">{{ sidebarCollapsed ? 'Expand' : 'Collapse' }} sidebar</span>
           <Bars3Icon class="h-6 w-6" aria-hidden="true" />
         </button>
 
@@ -210,7 +233,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -239,6 +262,21 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const sidebarOpen = ref(false)
+const sidebarCollapsed = ref(false)
+
+// Load sidebar state from localStorage on mount
+onMounted(() => {
+  const savedState = localStorage.getItem('sidebarCollapsed')
+  if (savedState !== null) {
+    sidebarCollapsed.value = savedState === 'true'
+  }
+})
+
+// Save sidebar state when it changes
+const toggleSidebar = () => {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  localStorage.setItem('sidebarCollapsed', String(sidebarCollapsed.value))
+}
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },

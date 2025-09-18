@@ -6,31 +6,6 @@
     </p>
     
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <!-- Web Search -->
-      <div class="tool-option">
-        <label class="flex items-start space-x-3 p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
-               :class="{ 'border-blue-500 bg-blue-50': modelValue.web_search }">
-          <input
-            type="checkbox"
-            :checked="modelValue.web_search"
-            @change="updateTool('web_search', $event.target.checked)"
-            class="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-          />
-          <div class="flex-1">
-            <h4 class="font-medium text-gray-900">Web Search</h4>
-            <p class="text-sm text-gray-600 mt-1">
-              Search the web for current information and real-time data
-            </p>
-            <div class="flex items-center mt-2 text-xs text-blue-600">
-              <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
-                <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/>
-              </svg>
-              Access live web data
-            </div>
-          </div>
-        </label>
-      </div>
 
       <!-- File Search -->
       <div class="tool-option">
@@ -82,41 +57,6 @@
         </label>
       </div>
 
-      <!-- Computer Use (if available) -->
-      <div class="tool-option">
-        <label class="flex items-start space-x-3 p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
-               :class="{ 
-                 'border-blue-500 bg-blue-50': modelValue.computer_use,
-                 'opacity-50 cursor-not-allowed': !computerUseAvailable 
-               }">
-          <input
-            type="checkbox"
-            :checked="modelValue.computer_use"
-            :disabled="!computerUseAvailable"
-            @change="updateTool('computer_use', $event.target.checked)"
-            class="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
-          />
-          <div class="flex-1">
-            <div class="flex items-center">
-              <h4 class="font-medium text-gray-900">Computer Use</h4>
-              <span v-if="!computerUseAvailable" class="ml-2 px-2 py-1 text-xs bg-gray-200 text-gray-600 rounded">
-                Beta
-              </span>
-            </div>
-            <p class="text-sm text-gray-600 mt-1">
-              {{ computerUseAvailable 
-                 ? 'Control computer interfaces and applications' 
-                 : 'Coming soon - Control computer interfaces and applications' }}
-            </p>
-            <div class="flex items-center mt-2 text-xs text-blue-600">
-              <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2h-2.22l.123.489.804.804A1 1 0 0113 18H7a1 1 0 01-.707-1.707l.804-.804L7.22 15H5a2 2 0 01-2-2V5zm5.771 7H5V5h10v7H8.771z" clip-rule="evenodd"/>
-              </svg>
-              {{ computerUseAvailable ? 'Desktop automation' : 'Beta feature' }}
-            </div>
-          </div>
-        </label>
-      </div>
     </div>
 
     <!-- Vector Store Configuration (when file_search is enabled) -->
@@ -158,8 +98,6 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
-// Computer use is currently in beta/limited availability
-const computerUseAvailable = computed(() => false)
 
 const vectorStoreIds = computed(() => 
   props.modelValue.vector_store_ids?.join(', ') || ''
