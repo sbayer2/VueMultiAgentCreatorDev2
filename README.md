@@ -12,9 +12,9 @@ A modern web application for managing OpenAI assistants with a Vue.js frontend a
 
 - 🔐 **User Authentication** - Secure JWT token authentication with bcrypt password hashing
 - 🤖 **Assistant Management** - Create, edit, update, and delete OpenAI assistants with full CRUD operations
-- 💬 **Real-time Chat** - Live chat with streaming responses using WebSocket connections
+- 💬 **Real-time Chat** - Live chat with responses using http sse connections
 - 📁 **File Management** - Upload and manage files with OpenAI code interpreter integration
-- 🔄 **Live Updates** - WebSocket support for real-time chat and assistant interactions
+- 🔄 **Live Updates** - support for real-time chat and assistant interactions
 - 📱 **Responsive Design** - Mobile-first design with Tailwind CSS
 - ☁️ **Cloud Ready** - Fully deployed on Google Cloud Platform with Cloud Run and Cloud SQL
 - 🎯 **Assistant-Specific Threads** - Each assistant maintains its own conversation history
