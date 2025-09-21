@@ -874,3 +874,33 @@ Common issues and solutions (authentication flow is currently working):
   🎵 OH YEAH... OH YEAH... CLAUDE AND HUMAN CREW... DEBUGGING THROUGH AND THROUGH! 🎵
 
   🎊🎉🕺💃🎊🎉🕺💃
+
+## Update Assistant Functionality - FULLY WORKING ✅ (2025-09-18)
+
+**Issue Resolved**: The "Update Assistant" button was crashing with validation errors and not properly updating existing assistants.
+
+**Root Cause**: Frontend form validation failure due to improper form data population in `AssistantEditView.vue`. The `useForm` composable requires `setFieldValue()` method instead of direct assignment to reactive form fields.
+
+**Fix Applied**:
+1. **Backend was already correct**: Using `client.beta.assistants.update(assistant_id, **update_data)` - the proper OpenAI Assistants API modify endpoint that preserves the same `assistant_id`
+2. **Frontend form fix**: Replaced direct assignments `form.value.name = data.name` with proper `setFieldValue('name', data.name)` calls
+3. **Validation flow**: Form now properly populates with assistant data, passes validation, and submits successfully
+
+**Technical Details**:
+- File: `frontend/src/views/AssistantEditView.vue`
+- Fix: Added `setFieldValue` to useForm destructuring and used it for form population
+- Backend: `backend/api/assistants.py` line 270 - correct OpenAI modify endpoint usage
+- Result: Complete end-to-end Update Assistant workflow functional
+
+**Testing Results**:
+- ✅ Form loads with assistant data properly populated
+- ✅ Validation passes (no more "name required" errors)
+- ✅ Backend calls OpenAI's modify assistant endpoint (preserving assistant_id)
+- ✅ Assistant gets updated with new field values
+- ✅ User redirected back to assistants list
+
+**Debug Logs**:
+```
+DEBUG: Validation result: – true
+DEBUG: Update result: – {success: true, data: Object}
+```

@@ -266,15 +266,25 @@ async def update_assistant(
         if assistant_update.description is not None:
             db_assistant.description = assistant_update.description
         
+        # Update basic assistant fields if provided
         if update_data:
-            client.beta.assistants.update(assistant_id, **update_data)
-        
+            try:
+                print(f"DEBUG: Updating assistant {assistant_id} basic fields: {update_data}")
+                client.beta.assistants.update(assistant_id, **update_data)
+                print(f"DEBUG: Successfully updated assistant {assistant_id} basic fields")
+            except Exception as e:
+                print(f"DEBUG: Failed to update assistant {assistant_id}: {str(e)}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Failed to update assistant: {str(e)}"
+                )
+
         # Update file IDs by merging old and new lists
         if assistant_update.file_ids is not None:
             # Get existing files and merge with new ones, ensuring no duplicates
             existing_file_ids = json.loads(db_assistant.file_ids) if db_assistant.file_ids else []
             updated_file_ids = list(set(existing_file_ids + assistant_update.file_ids))
-            
+
             tools = [{"type": "code_interpreter"}]
 
             # Separate files by purpose for tool_resources
@@ -282,22 +292,31 @@ async def update_assistant(
                 FileMetadata.file_id.in_(updated_file_ids),
                 FileMetadata.uploaded_by == current_user.id
             ).all()
-            
+
             tool_resources_file_ids = [
                 f.file_id for f in db_files if f.purpose == 'assistants'
             ]
 
             # Update assistant with the complete list of tool files
-            client.beta.assistants.update(
-                assistant_id,
-                tools=tools,
-                tool_resources={
-                    "code_interpreter": {
-                        "file_ids": tool_resources_file_ids
-                    }
-                } if tool_resources_file_ids else {}
-            )
-            
+            try:
+                print(f"DEBUG: Updating assistant {assistant_id} file attachments: {tool_resources_file_ids}")
+                client.beta.assistants.update(
+                    assistant_id,
+                    tools=tools,
+                    tool_resources={
+                        "code_interpreter": {
+                            "file_ids": tool_resources_file_ids
+                        }
+                    } if tool_resources_file_ids else {}
+                )
+                print(f"DEBUG: Successfully updated assistant {assistant_id} file attachments")
+            except Exception as e:
+                print(f"DEBUG: Failed to update assistant file attachments: {str(e)}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Failed to update assistant files: {str(e)}"
+                )
+
             # Save the complete, merged list of all file IDs to the database
             db_assistant.file_ids = json.dumps(updated_file_ids)
         

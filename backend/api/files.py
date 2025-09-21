@@ -114,7 +114,7 @@ async def upload_file_for_assistant(
         db.add(db_file)
         db.commit()
         
-        # If assistant_id provided and file purpose is 'assistants', attach to assistant
+        # Attach file to assistant tool_resources.code_interpreter.file_ids (CRITICAL for assistant to access files)
         if assistant_id and purpose == 'assistants':
             try:
                 # Verify user owns the assistant
@@ -122,38 +122,51 @@ async def upload_file_for_assistant(
                     UserAssistant.assistant_id == assistant_id,
                     UserAssistant.user_id == current_user.id
                 ).first()
-                
+
                 if db_assistant:
                     # Get current assistant file_ids from OpenAI
-                    openai_assistant = client.beta.assistants.retrieve(assistant_id)
-                    current_openai_file_ids = []
-                    if (hasattr(openai_assistant, 'tool_resources') and openai_assistant.tool_resources and 
-                        hasattr(openai_assistant.tool_resources, 'code_interpreter') and 
-                        openai_assistant.tool_resources.code_interpreter and
-                        hasattr(openai_assistant.tool_resources.code_interpreter, 'file_ids')):
-                        current_openai_file_ids = openai_assistant.tool_resources.code_interpreter.file_ids or []
-                    
+                    try:
+                        print(f"DEBUG: Retrieving assistant {assistant_id} to get current file_ids")
+                        openai_assistant = client.beta.assistants.retrieve(assistant_id)
+                        current_openai_file_ids = []
+                        if (hasattr(openai_assistant, 'tool_resources') and openai_assistant.tool_resources and
+                            hasattr(openai_assistant.tool_resources, 'code_interpreter') and
+                            openai_assistant.tool_resources.code_interpreter and
+                            hasattr(openai_assistant.tool_resources.code_interpreter, 'file_ids')):
+                            current_openai_file_ids = openai_assistant.tool_resources.code_interpreter.file_ids or []
+                        print(f"DEBUG: Current assistant file_ids: {current_openai_file_ids}")
+                    except Exception as e:
+                        print(f"DEBUG: Failed to retrieve assistant {assistant_id}: {str(e)}")
+                        # If we can't retrieve the assistant, assume no existing files
+                        current_openai_file_ids = []
+
                     # Add new file to OpenAI assistant if not already there
                     if openai_file.id not in current_openai_file_ids:
                         updated_file_ids = current_openai_file_ids + [openai_file.id]
-                        client.beta.assistants.update(
-                            assistant_id=assistant_id,
-                            tool_resources={"code_interpreter": {"file_ids": updated_file_ids}}
-                        )
-                        
+                        print(f"DEBUG: Updating assistant {assistant_id} tool_resources with file_ids: {updated_file_ids}")
+                        try:
+                            client.beta.assistants.update(
+                                assistant_id=assistant_id,
+                                tool_resources={"code_interpreter": {"file_ids": updated_file_ids}}
+                            )
+                            print(f"DEBUG: Successfully updated assistant {assistant_id} with file {openai_file.id}")
+                        except Exception as e:
+                            print(f"DEBUG: Failed to update assistant {assistant_id} tool_resources: {str(e)}")
+                            raise
+
                         # Update database to track the new file
                         db_file_ids = json.loads(db_assistant.file_ids) if db_assistant.file_ids else []
                         if openai_file.id not in db_file_ids:
                             updated_db_file_ids = db_file_ids + [openai_file.id]
                             db_assistant.file_ids = json.dumps(updated_db_file_ids)
                             db.commit()
-                        
+
                         print(f"DEBUG: Attached file {openai_file.id} to assistant {assistant_id}")
                     else:
                         print(f"DEBUG: File {openai_file.id} already attached to assistant {assistant_id}")
                 else:
                     print(f"DEBUG: Assistant {assistant_id} not found or not owned by user")
-                    
+
             except Exception as e:
                 print(f"DEBUG: Failed to attach file to assistant: {str(e)}")
                 # Don't fail the upload if assistant attachment fails
