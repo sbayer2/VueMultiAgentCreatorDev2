@@ -19,11 +19,27 @@ AVAILABLE_MODELS = [
     "gpt-4.1-2025-04-14",  # Latest model for assistants
     "gpt-4.1-mini-2025-04-01",  # Latest mini model
     "gpt-4o",
-    "gpt-4o-mini", 
+    "gpt-4o-mini",
     "gpt-4-turbo",
     "gpt-4",
     "gpt-3.5-turbo"
 ]
+
+# TEMPORARILY DISABLED - May cause performance issues
+# def get_conversation_count(thread_id: Optional[str]) -> int:
+#     """Get the number of messages in a thread (conversation count)"""
+#     if not thread_id:
+#         return 0
+#
+#     try:
+#         # Get messages from the thread
+#         messages = client.beta.threads.messages.list(thread_id=thread_id, limit=100)
+#         # Count only user messages (each user message = 1 conversation turn)
+#         user_message_count = sum(1 for msg in messages.data if msg.role == "user")
+#         return user_message_count
+#     except Exception as e:
+#         print(f"DEBUG: Failed to get conversation count for thread {thread_id}: {e}")
+#         return 0
 
 # Pydantic models
 class AssistantCreate(BaseModel):
@@ -102,7 +118,7 @@ async def list_assistants(
             file_ids=actual_file_ids,
             thread_id=a.thread_id,
             tools={"file_search": False, "code_interpreter": True, "vector_store_ids": []},
-            conversation_count=0,  # TODO: Implement actual conversation counting
+            conversation_count=0,  # Temporarily disabled - may cause performance issues
             created_at=a.created_at.isoformat() if a.created_at else ""
         ))
     
@@ -159,7 +175,7 @@ async def get_assistant(
         file_ids=json.loads(db_assistant.file_ids) if db_assistant.file_ids else [],
         thread_id=db_assistant.thread_id,
         tools=tools_config,
-        conversation_count=0,  # TODO: Implement actual conversation counting
+        conversation_count=0,  # Temporarily disabled
         created_at=db_assistant.created_at.isoformat() if db_assistant.created_at else "",
         updated_at=db_assistant.updated_at.isoformat() if db_assistant.updated_at else None
     )
@@ -332,7 +348,7 @@ async def update_assistant(
             model=db_assistant.model,
             file_ids=json.loads(db_assistant.file_ids) if db_assistant.file_ids else [],
             tools={"file_search": False, "code_interpreter": True, "vector_store_ids": []},
-            conversation_count=0,
+            conversation_count=0,  # Temporarily disabled
             created_at=db_assistant.created_at.isoformat() if db_assistant.created_at else ""
         )
         

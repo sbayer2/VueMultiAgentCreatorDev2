@@ -23,7 +23,14 @@ class Settings(BaseSettings):
     
     # CORS
     FRONTEND_URL: str = "http://localhost:5173"
-    
+
+    # Email configuration (for password reset)
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    FROM_EMAIL: str = ""
+
     # Google Cloud
     GOOGLE_CLOUD_PROJECT: Optional[str] = None
     GOOGLE_CLOUD_BUCKET: Optional[str] = None

@@ -105,12 +105,16 @@ const props = defineProps<{
   streamingContent?: string
 }>()
 
-const imageAttachments = computed(() => 
-  props.message.attachments?.filter(att => att.type.startsWith('image/')) ?? []
+const imageAttachments = computed(() =>
+  props.message.attachments?.filter(att =>
+    att.type === 'image_file' || att.type === 'image' || att.type.startsWith('image/')
+  ) ?? []
 );
 
-const nonImageAttachments = computed(() => 
-  props.message.attachments?.filter(att => !att.type.startsWith('image/')) ?? []
+const nonImageAttachments = computed(() =>
+  props.message.attachments?.filter(att =>
+    att.type !== 'image_file' && att.type !== 'image' && !att.type.startsWith('image/')
+  ) ?? []
 );
 
 

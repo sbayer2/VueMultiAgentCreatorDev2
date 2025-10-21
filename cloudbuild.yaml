@@ -31,7 +31,7 @@ steps:
       - '--set-env-vars'
       - 'DB_HOST=34.45.198.154,DB_USER=root,DB_NAME=vue_app,FRONTEND_URL=https://vue-multiagent-frontend-129438231958.us-central1.run.app'
       - '--set-secrets'
-      - 'OPENAI_API_KEY=openai-api-key:latest,SECRET_KEY=jwt-secret-key:latest,DB_PASS=db-password:latest'
+      - 'OPENAI_API_KEY=openai-api-key:latest,SECRET_KEY=jwt-secret-key:latest,DB_PASS=db-password:latest,SMTP_USER=SMTP_USER:latest,SMTP_PASSWORD=SMTP_PASSWORD:latest,FROM_EMAIL=FROM_EMAIL:latest'
       - '--timeout'
       - '300'
       - '--memory'

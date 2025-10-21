@@ -223,8 +223,10 @@ const getImageUrl = (image: ImageAttachment) => {
   if (image.url || image.preview_url) {
     return image.preview_url || image.url
   }
-  // Build URL from file_id for MMACTEMP pattern
-  return `/api/files/openai/${image.file_id}`
+  // Build absolute URL to backend for MMACTEMP pattern
+  // VITE_API_URL includes /api, so we append /files/openai/{file_id}
+  const apiBaseUrl = import.meta.env.VITE_API_URL || '/api'
+  return `${apiBaseUrl}/files/openai/${image.file_id}`
 }
 
 const onImageLoad = (event: Event, image: ImageAttachment) => {

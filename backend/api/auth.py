@@ -1,12 +1,17 @@
 """Authentication endpoints"""
 from datetime import datetime, timedelta
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+import secrets
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import os
 
 from models.database import get_db, User
 from utils.config import settings
@@ -200,23 +205,190 @@ async def delete_account(current_user: User = Depends(get_current_user), db: Ses
     return {"message": "Account deleted successfully"}
 
 # Temporary endpoint for testing - remove in production
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str
+
+def create_reset_token(email: str) -> str:
+    """Create a password reset token"""
+    # Create a token with email and expiry embedded
+    from datetime import timezone
+    data = {
+        "email": email,
+        "exp": datetime.now(timezone.utc) + timedelta(hours=1),  # Token expires in 1 hour
+        "type": "password_reset"
+    }
+    token = jwt.encode(data, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return token
+
+def verify_reset_token(token: str) -> Optional[str]:
+    """Verify password reset token and return email if valid"""
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        if payload.get("type") != "password_reset":
+            return None
+        email = payload.get("email")
+        return email
+    except JWTError:
+        return None
+
+def send_email_sync(to_email: str, subject: str, body: str):
+    """Synchronously send email via SMTP"""
+    try:
+        # Only send email if SMTP is configured
+        if not settings.SMTP_USER or not settings.SMTP_PASSWORD:
+            print(f"Email not configured. Would send to {to_email}: {subject}")
+            print(f"Reset URL: {body}")
+            return
+
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = settings.FROM_EMAIL or settings.SMTP_USER
+        msg['To'] = to_email
+
+        # Create HTML version
+        html_body = f"""
+        <html>
+          <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #333;">Password Reset Request</h2>
+            <p>You requested to reset your password. Click the link below to set a new password:</p>
+            <p style="margin: 30px 0;">
+              <a href="{body}" style="background-color: #4CAF50; color: white; padding: 14px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">
+                Reset Password
+              </a>
+            </p>
+            <p style="color: #666; font-size: 14px;">Or copy and paste this link into your browser:</p>
+            <p style="color: #666; font-size: 14px; word-break: break-all;">{body}</p>
+            <p style="color: #666; font-size: 14px; margin-top: 30px;">This link will expire in 1 hour.</p>
+            <p style="color: #666; font-size: 14px;">If you didn't request this, please ignore this email.</p>
+          </body>
+        </html>
+        """
+
+        # Create plain text version
+        text_body = f"""
+Password Reset Request
+
+You requested to reset your password. Visit this link to set a new password:
+
+{body}
+
+This link will expire in 1 hour.
+
+If you didn't request this, please ignore this email.
+        """
+
+        part1 = MIMEText(text_body, 'plain')
+        part2 = MIMEText(html_body, 'html')
+
+        msg.attach(part1)
+        msg.attach(part2)
+
+        # Send email
+        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
+            server.starttls()
+            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+            server.send_message(msg)
+
+        print(f"Password reset email sent to {to_email}")
+    except Exception as e:
+        print(f"Failed to send email to {to_email}: {str(e)}")
+        # Log the URL as fallback
+        print(f"Password reset URL for {to_email}: {body}")
+
+async def send_password_reset_email(email: str, reset_url: str, background_tasks: BackgroundTasks):
+    """Send password reset email asynchronously"""
+    background_tasks.add_task(send_email_sync, email, "Reset Your Password", reset_url)
+
+@router.post("/forgot-password")
+async def forgot_password(
+    request: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """Request password reset"""
+    # Check if user exists
+    user = db.query(User).filter(User.username == request.email).first()
+
+    # Always return success to prevent email enumeration
+    if user:
+        # Create reset token
+        token = create_reset_token(request.email)
+
+        # In production, use actual frontend URL from environment variable
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+        reset_url = f"{frontend_url}/reset-password?token={token}"
+
+        # Send email (async)
+        await send_password_reset_email(request.email, reset_url, background_tasks)
+
+    return AuthResponse(
+        success=True,
+        data={"message": "If an account exists with that email, we've sent you a password reset link."}
+    )
+
+@router.post("/reset-password")
+async def reset_password(
+    request: ResetPasswordRequest,
+    db: Session = Depends(get_db)
+):
+    """Reset password with token"""
+    print(f"DEBUG: Reset password request received")
+    print(f"DEBUG: Token length: {len(request.token)}")
+
+    # Verify token
+    email = verify_reset_token(request.token)
+    if not email:
+        print(f"DEBUG: Token verification failed")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token"
+        )
+
+    print(f"DEBUG: Token verified for email: {email}")
+
+    # Find user
+    user = db.query(User).filter(User.username == email).first()
+    if not user:
+        print(f"DEBUG: User not found for email: {email}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User not found"
+        )
+
+    print(f"DEBUG: User found: {user.id}, updating password")
+
+    # Update password
+    user.password_hash = get_password_hash(request.password)
+    db.commit()
+
+    print(f"DEBUG: Password updated successfully for user: {email}")
+
+    return AuthResponse(
+        success=True,
+        data={"message": "Password reset successfully"}
+    )
+
 @router.delete("/reset-all-users-test-only")
 async def reset_all_users(db: Session = Depends(get_db)):
     """Delete all users and related data - FOR TESTING ONLY"""
     try:
         from models.database import UserAssistant, Assistant, Conversation, ConversationMessage, FileMetadata
-        
+
         # Get count before deletion
         user_count = db.query(User).count()
-        
+
         # Delete in order to respect foreign key constraints
         db.query(ConversationMessage).delete()
-        db.query(Conversation).delete() 
+        db.query(Conversation).delete()
         db.query(FileMetadata).delete()
         db.query(Assistant).delete()
         db.query(UserAssistant).delete()
         db.query(User).delete()
-        
+
         db.commit()
         return {"success": True, "message": f"Deleted {user_count} users and all related data"}
     except Exception as e:

@@ -28,14 +28,70 @@ export const useConversationsStore = defineStore('conversations', () => {
   /**
    * Selects an assistant to chat with, effectively starting or resuming a conversation.
    */
-  const selectAssistantForChat = (assistant: Assistant) => {
+  const selectAssistantForChat = async (assistant: Assistant) => {
     if (currentAssistant.value?.id === assistant.id) {
       return; // Already selected
     }
     currentAssistant.value = assistant;
     currentMessages.value = []; // Clear previous messages
     error.value = null;
-    // In a real app, you might fetch recent messages for the assistant's thread here.
+
+    // Fetch message history for this assistant's thread
+    await loadThreadMessages(assistant.assistant_id);
+  };
+
+  /**
+   * Loads message history from the assistant's thread.
+   */
+  const loadThreadMessages = async (assistantId: string) => {
+    isLoading.value = true;
+    error.value = null;
+
+    try {
+      const response = await apiClient.get(`/chat/messages/${assistantId}`);
+
+      if (response.success && response.data) {
+        const { messages } = response.data;
+
+        // Format messages for display
+        const formattedMessages: ConversationMessage[] = messages.map((msg: any) => {
+          let attachments: ImageAttachment[] | undefined;
+
+          if (msg.attachments && msg.attachments.length > 0) {
+            // Build absolute URLs to backend for image loading
+            const apiBaseUrl = import.meta.env.VITE_API_URL || '/api'
+            attachments = msg.attachments.map((att: any) => ({
+              id: att.file_id,
+              file_id: att.file_id,
+              name: `image_${att.file_id.slice(-6)}.png`,
+              size: 0,
+              type: 'image_file',
+              url: `${apiBaseUrl}/files/openai/${att.file_id}`,
+              preview_url: `${apiBaseUrl}/files/openai/${att.file_id}`,
+            }));
+          }
+
+          return {
+            id: msg.id,
+            role: msg.role,
+            content: msg.content,
+            created_at: msg.created_at,
+            attachments,
+          };
+        });
+
+        currentMessages.value = formattedMessages;
+      } else {
+        // No messages or error - start with empty array
+        currentMessages.value = [];
+      }
+    } catch (err: any) {
+      console.error('Failed to load thread messages:', err);
+      error.value = err.message || 'Failed to load message history';
+      currentMessages.value = [];
+    } finally {
+      isLoading.value = false;
+    }
   };
 
   /**

@@ -113,8 +113,8 @@ const { assistantsList } = storeToRefs(assistantsStore)
 const { activeAssistant, activeThreadMessages } = storeToRefs(conversationsStore)
 
 // Methods
-const selectAssistant = (assistant: Assistant) => {
-  conversationsStore.selectAssistantForChat(assistant)
+const selectAssistant = async (assistant: Assistant) => {
+  await conversationsStore.selectAssistantForChat(assistant)
   // Update URL to reflect the selected assistant, which now represents the "conversation"
   router.replace({ name: 'chat', params: { conversationId: assistant.id.toString() } })
 }

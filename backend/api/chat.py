@@ -86,6 +86,7 @@ async def send_message(
                     if f.file_id not in image_file_ids:
                          image_file_ids.append(f.file_id)
                 elif f.purpose == 'assistants':
+
                     if f.file_id not in file_ids_for_code_interpreter:
                         file_ids_for_code_interpreter.append(f.file_id)
         
@@ -219,6 +220,81 @@ async def send_message(
 class NewThreadRequest(BaseModel):
     assistant_id: str
 
+@router.get("/messages/{assistant_id}")
+async def get_thread_messages(
+    assistant_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Fetch message history for an assistant's thread."""
+    db_assistant = db.query(UserAssistant).filter(
+        UserAssistant.assistant_id == assistant_id,
+        UserAssistant.user_id == current_user.id
+    ).first()
+
+    if not db_assistant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assistant not found")
+
+    # If no thread exists yet, return empty messages
+    if not db_assistant.thread_id:
+        return {
+            "success": True,
+            "data": {
+                "thread_id": None,
+                "messages": []
+            }
+        }
+
+    try:
+        # Fetch messages from OpenAI thread
+        messages = client.beta.threads.messages.list(
+            thread_id=db_assistant.thread_id,
+            limit=50,  # Fetch last 50 messages
+            order="asc"  # Oldest first for chronological display
+        )
+
+        # Format messages for frontend
+        formatted_messages = []
+        for msg in messages.data:
+            message_content = ""
+            image_attachments = []
+
+            # Extract text and image content
+            for content in msg.content:
+                if content.type == 'text':
+                    message_content += content.text.value
+                elif content.type == 'image_file':
+                    image_attachments.append({
+                        "file_id": content.image_file.file_id,
+                        "type": "image"
+                    })
+
+            # Convert Unix timestamp to ISO string for frontend
+            from datetime import datetime
+            created_at_iso = datetime.fromtimestamp(msg.created_at).isoformat()
+
+            formatted_messages.append({
+                "id": msg.id,
+                "role": msg.role,
+                "content": message_content,
+                "created_at": created_at_iso,
+                "attachments": image_attachments if image_attachments else None
+            })
+
+        return {
+            "success": True,
+            "data": {
+                "thread_id": db_assistant.thread_id,
+                "messages": formatted_messages
+            }
+        }
+    except Exception as e:
+        print(f"DEBUG: Failed to fetch thread messages: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch messages: {str(e)}"
+        )
+
 @router.post("/new-thread")
 async def create_new_thread(
     request: NewThreadRequest,
@@ -230,15 +306,15 @@ async def create_new_thread(
         UserAssistant.assistant_id == request.assistant_id,
         UserAssistant.user_id == current_user.id
     ).first()
-    
+
     if not db_assistant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assistant not found")
-    
+
     try:
         thread = client.beta.threads.create()
         db_assistant.thread_id = thread.id
         db.commit()
-        
+
         return {
             "success": True,
             "thread_id": thread.id,

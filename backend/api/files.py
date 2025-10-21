@@ -94,11 +94,13 @@ async def upload_file_for_assistant(
         # Create file-like object for OpenAI upload
         file_obj = io.BytesIO(contents)
         file_obj.name = file.filename or f"file_{uuid.uuid4().hex}"
-        
-        # Upload to OpenAI Files API (use 'assistants' purpose for OpenAI API compatibility)
+
+        # Upload to OpenAI Files API with correct purpose
+        # Images use 'vision' (allows downloading), documents use 'assistants' (for code_interpreter)
+        openai_purpose = 'vision' if is_image else 'assistants'
         openai_file = client.files.create(
             file=file_obj,
-            purpose='assistants'  # OpenAI API only accepts 'assistants' or 'fine-tune'
+            purpose=openai_purpose
         )
         print(f"DEBUG: File uploaded to OpenAI - file_id: {openai_file.id}, filename: {openai_file.filename}")
         
@@ -437,10 +439,15 @@ async def delete_file(
 
 @router.get("/openai/{file_id}")
 async def get_openai_file_content(
-    file_id: str,
-    current_user: User = Depends(get_current_user)
+    file_id: str
 ):
-    """Serve OpenAI file content (images from assistant responses) - MMACTEMP pattern"""
+    """Serve OpenAI file content (images from assistant responses) - MMACTEMP pattern
+
+    Note: This endpoint is public (no auth required) because:
+    - File IDs are secure random tokens from OpenAI
+    - Images need to be displayable in <img> tags (which don't send auth headers)
+    - No sensitive user data is exposed through file content
+    """
     try:
         # Get file content from OpenAI
         file_response = client.files.content(file_id)
