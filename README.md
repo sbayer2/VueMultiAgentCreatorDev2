@@ -20,19 +20,27 @@ A modern web application for managing OpenAI assistants with a Vue.js frontend a
 - 🎯 **Assistant-Specific Threads** - Each assistant maintains its own conversation history
 - 🔧 **Form Validation** - Robust form validation with Vue composables
 
-## 🆕 Latest Updates (2025-09-18)
+## 🆕 Latest Updates (2025-10-21)
 
-### ✅ Update Assistant Functionality - FULLY WORKING
-- **Fixed** form validation issues in Assistant Edit view
-- **Implemented** proper `setFieldValue()` usage with Vue composables
-- **Backend** correctly uses OpenAI's `modify` endpoint to preserve assistant IDs
-- **Complete** end-to-end assistant update workflow now functional
+### ✅ Image Display Persistence - FULLY WORKING
+- **Fixed** image display after browser refresh - images now persist correctly
+- **Resolved** OpenAI file purpose issue - images use `purpose='vision'` (downloadable) instead of `purpose='assistants'`
+- **Fixed** timestamp display showing "Jan 21, 1970" - now shows correct dates with proper Unix timestamp conversion
+- **Fixed** image type recognition - properly detects `image_file`, `image`, and `image/*` types
+- **Removed** authentication requirement from image endpoint - allows browser `<img>` tags to load images
+- **Fixed** image URL routing - uses absolute backend URLs instead of relative paths that caused 404 errors
 
-### ✅ Recent Improvements
-- Enhanced debug logging for better troubleshooting
-- Optimized file deletion with proper error handling
-- Fixed form data population in assistant editing
-- Improved validation flow with detailed error reporting
+### ✅ Forgot Password Feature
+- **Added** complete password recovery workflow with email delivery
+- **Implemented** Gmail SMTP integration with App Password authentication
+- **Created** secure JWT reset tokens with 1-hour expiry
+- **Designed** HTML email templates with reset links
+- **Added** ForgotPasswordView and ResetPasswordView components
+
+### ✅ Documentation
+- **Created** comprehensive `docs/` directory with architecture, deployment, and authentication guides
+- **Added** detailed changelog tracking all project changes
+- **Included** token optimization strategies for cost management
 
 ## 🏗️ Architecture
 
@@ -241,6 +249,10 @@ MIT License - see the [LICENSE](LICENSE) file for details.
 ## 🐛 Known Issues & Fixes
 
 ### ✅ Resolved Issues
+- **Image Display After Refresh**: Fixed OpenAI file purpose and URL routing - images now persist after browser refresh (2025-10-21)
+- **Timestamp Display**: Fixed "Jan 21, 1970" bug with proper Unix timestamp conversion (2025-10-21)
+- **Image Type Recognition**: Fixed filter to detect all image types (image_file, image, image/*) (2025-10-21)
+- **Image Authentication**: Removed auth requirement from image endpoint for browser compatibility (2025-10-21)
 - **Update Assistant Button**: Fixed form validation and data population (2025-09-18)
 - **File Management**: Implemented proper MMACTEMP pattern for image/document separation
 - **Authentication Flow**: JWT token management with proper validation
