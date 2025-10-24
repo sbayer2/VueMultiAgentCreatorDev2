@@ -77,23 +77,13 @@ const fetchFileDetails = async () => {
   }
 };
 
-// Delete file - emit to parent to handle backend delete
-// No optimistic UI update - wait for parent to confirm success
+// Delete file - emit to parent, let parent handle the backend delete
 const deleteFile = (fileId: string) => {
-  console.log(`DEBUG: Deleting file ${fileId}`);
-
+  console.log(`DEBUG: Attempting to delete file ${fileId}`);
   // Emit event to parent to handle backend delete
-  // Parent will call refreshFiles() on success
   console.log(`DEBUG: Emitting delete-file event for ${fileId}`);
   emit('delete-file', fileId);
 };
-
-// Expose refresh method for parent to call after successful deletion
-const refreshFiles = () => {
-  fetchFileDetails();
-};
-
-defineExpose({ refreshFiles });
 
 watch(() => props.assistant?.file_ids, fetchFileDetails, { deep: true, immediate: true });
 
