@@ -77,10 +77,16 @@ const fetchFileDetails = async () => {
   }
 };
 
-// Delete file - emit to parent, let parent handle the backend delete
+// Delete file with optimistic UI update (will be restored by parent if delete fails)
 const deleteFile = (fileId: string) => {
-  console.log(`DEBUG: Attempting to delete file ${fileId}`);
+  console.log(`DEBUG: Deleting file ${fileId} from UI`);
+
+  // Optimistic update - immediately remove from UI for better UX
+  files.value = files.value.filter(f => f.file_id !== fileId);
+  console.log(`DEBUG: File removed from UI optimistically`);
+
   // Emit event to parent to handle backend delete
+  // Parent will refresh assistant data which will trigger watcher to restore files if delete failed
   console.log(`DEBUG: Emitting delete-file event for ${fileId}`);
   emit('delete-file', fileId);
 };
