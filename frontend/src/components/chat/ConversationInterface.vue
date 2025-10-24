@@ -50,7 +50,12 @@
     <div class="flex-none border-t border-gray-200 p-4">
       <!-- Attached Files Pop-up -->
       <div v-if="isFileFolderOpen" class="mb-4">
-        <AttachedFilesList :assistant="activeAssistant" @delete-file="handleDeleteFile" />
+        <AttachedFilesList ref="attachedFilesListComponent" :assistant="activeAssistant" @delete-file="handleDeleteFile" />
+      </div>
+
+      <!-- Delete Error Message -->
+      <div v-if="deleteError" class="mb-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded p-2">
+        {{ deleteError }}
       </div>
 
       <form @submit.prevent="handleSendMessage" class="relative">
@@ -111,8 +116,10 @@ const isResettingThread = ref(false);
 const messagesContainer = ref<HTMLElement | null>(null);
 const messageInput = ref<HTMLTextAreaElement | null>(null);
 const imageUploadComponent = ref<InstanceType<typeof ChatFileUpload> | null>(null);
+const attachedFilesListComponent = ref<InstanceType<typeof AttachedFilesList> | null>(null);
 const attachedImages = ref<ImageAttachment[]>([]);
 const isFileFolderOpen = ref(false);
+const deleteError = ref<string | null>(null);
 
 const canSend = computed(() => (newMessage.value.trim().length > 0 || attachedImages.value.length > 0) && !isSending.value);
 
@@ -151,24 +158,34 @@ const handleDocumentUploaded = async (file: ImageAttachment) => {
 
 const handleDeleteFile = async (fileId: string) => {
   console.log(`DEBUG: handleDeleteFile called for ${fileId}`);
+  deleteError.value = null;  // Clear any previous errors
+
   if (!activeAssistant.value) {
     console.log('DEBUG: No active assistant, aborting delete');
+    deleteError.value = 'No active assistant selected';
     return;
   }
-  
+
   if (confirm('Are you sure you want to permanently delete this file?')) {
     console.log(`DEBUG: User confirmed deletion of ${fileId}`);
     console.log(`DEBUG: Calling store to remove file from assistant ${activeAssistant.value.assistant_id}`);
-    
+
     const result = await assistantsStore.removeFileFromAssistant(activeAssistant.value.assistant_id, fileId);
-    
+
     if (result.success) {
       console.log(`DEBUG: File ${fileId} deleted successfully`);
+      // Refresh the assistant data to get updated file list
+      if (activeAssistant.value) {
+        await assistantsStore.fetchAssistant(activeAssistant.value.assistant_id);
+      }
+      // Refresh the file list UI
+      if (attachedFilesListComponent.value) {
+        attachedFilesListComponent.value.refreshFiles();
+      }
     } else {
       console.error(`DEBUG: Failed to delete file ${fileId}:`, result.error);
-      // Optionally refresh the file list to restore the UI if delete failed
-      // But since we're using optimistic updates, the UI already removed it
-      // You could add error toast notification here
+      deleteError.value = result.error || 'Failed to delete file. Please try again.';
+      // Error will be displayed to user via deleteError ref
     }
   } else {
     console.log(`DEBUG: User cancelled deletion of ${fileId}`);

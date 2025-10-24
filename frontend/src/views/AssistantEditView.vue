@@ -189,10 +189,28 @@
         <h2 class="text-xl font-semibold text-gray-900 mb-4">Conversation History</h2>
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-gray-600">
-              This assistant has <strong>{{ assistant.conversation_count }}</strong> conversations
-            </p>
-            <p class="text-sm text-gray-500 mt-1">
+            <div class="flex items-center gap-3 mb-2">
+              <span class="text-gray-600">Status:</span>
+              <span
+                v-if="assistant.conversation_count > 0"
+                class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800"
+              >
+                <svg class="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                </svg>
+                Active
+              </span>
+              <span
+                v-else
+                class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-600"
+              >
+                <svg class="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-2a6 6 0 100-12 6 6 0 000 12z" clip-rule="evenodd"/>
+                </svg>
+                Not Started
+              </span>
+            </div>
+            <p class="text-sm text-gray-500">
               Created {{ formatDate(assistant.created_at) }}
               <span v-if="assistant.updated_at">• Last updated {{ formatDate(assistant.updated_at) }}</span>
             </p>

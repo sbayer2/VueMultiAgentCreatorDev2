@@ -110,14 +110,14 @@ const stats = computed(() => {
   if (!dashboardData.value) {
     return [
       { name: 'Total Assistants', value: '...' },
-      { name: 'Active Chats', value: '...' },
+      { name: 'Active Assistants', value: '...' },
       { name: 'Messages Today', value: '...' },
       { name: 'API Usage', value: '...' },
     ]
   }
   return [
     { name: 'Total Assistants', value: dashboardData.value.stats.totalAssistants },
-    { name: 'Active Chats', value: dashboardData.value.stats.activeChats },
+    { name: 'Active Assistants', value: dashboardData.value.stats.activeChats },
     { name: 'Messages Today', value: dashboardData.value.stats.messagesToday },
     { name: 'API Usage', value: dashboardData.value.stats.apiUsage },
   ]

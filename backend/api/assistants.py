@@ -84,12 +84,12 @@ async def list_assistants(
     assistants = db.query(UserAssistant).filter(
         UserAssistant.user_id == current_user.id
     ).all()
-    
+
     result = []
     for a in assistants:
         # Get current file_ids from database
         db_file_ids = json.loads(a.file_ids) if a.file_ids else []
-        
+
         # Sync with OpenAI to get the actual attached files
         try:
             openai_assistant = client.beta.assistants.retrieve(a.assistant_id)
@@ -98,16 +98,20 @@ async def list_assistants(
                 if hasattr(openai_assistant.tool_resources, 'code_interpreter') and openai_assistant.tool_resources.code_interpreter:
                     if hasattr(openai_assistant.tool_resources.code_interpreter, 'file_ids'):
                         openai_file_ids = openai_assistant.tool_resources.code_interpreter.file_ids or []
-            
+
             print(f"DEBUG: Assistant {a.assistant_id} - DB files: {db_file_ids}, OpenAI files: {openai_file_ids}")
-            
+
             # Use OpenAI's file list since it's the source of truth
             actual_file_ids = openai_file_ids if openai_file_ids else db_file_ids
-            
+
         except Exception as e:
             print(f"DEBUG: Failed to get OpenAI assistant {a.assistant_id}: {e}")
             actual_file_ids = db_file_ids
-        
+
+        # Simple conversation count: 1 if thread exists, 0 otherwise
+        # Each assistant has one persistent thread for all conversations
+        conversation_count = 1 if a.thread_id else 0
+
         result.append(AssistantResponse(
             id=a.id,
             assistant_id=a.assistant_id,
@@ -118,10 +122,10 @@ async def list_assistants(
             file_ids=actual_file_ids,
             thread_id=a.thread_id,
             tools={"file_search": False, "code_interpreter": True, "vector_store_ids": []},
-            conversation_count=0,  # Temporarily disabled - may cause performance issues
+            conversation_count=conversation_count,
             created_at=a.created_at.isoformat() if a.created_at else ""
         ))
-    
+
     return result
 
 @router.get("/{assistant_id}", response_model=AssistantResponse)
@@ -165,6 +169,9 @@ async def get_assistant(
         # Fallback to default tools config (only valid Assistants Beta v2 tools)
         tools_config = {"file_search": False, "code_interpreter": True, "vector_store_ids": []}
 
+    # Simple conversation count: 1 if thread exists, 0 otherwise
+    conversation_count = 1 if db_assistant.thread_id else 0
+
     return AssistantResponse(
         id=db_assistant.id,
         assistant_id=db_assistant.assistant_id,
@@ -175,7 +182,7 @@ async def get_assistant(
         file_ids=json.loads(db_assistant.file_ids) if db_assistant.file_ids else [],
         thread_id=db_assistant.thread_id,
         tools=tools_config,
-        conversation_count=0,  # Temporarily disabled
+        conversation_count=conversation_count,
         created_at=db_assistant.created_at.isoformat() if db_assistant.created_at else "",
         updated_at=db_assistant.updated_at.isoformat() if db_assistant.updated_at else None
     )
@@ -227,6 +234,7 @@ async def create_assistant(
         db.commit()
         db.refresh(db_assistant)
         
+        # Conversation count is 1 since we just created a thread
         return AssistantResponse(
             id=db_assistant.id,
             assistant_id=db_assistant.assistant_id,
@@ -237,7 +245,7 @@ async def create_assistant(
             file_ids=unique_file_ids,
             thread_id=thread.id,
             tools={"file_search": False, "code_interpreter": True, "vector_store_ids": []},
-            conversation_count=0,
+            conversation_count=1,
             created_at=db_assistant.created_at.isoformat() if db_assistant.created_at else ""
         )
         
@@ -339,6 +347,9 @@ async def update_assistant(
         db.commit()
         db.refresh(db_assistant)
         
+        # Simple conversation count: 1 if thread exists, 0 otherwise
+        conversation_count = 1 if db_assistant.thread_id else 0
+
         return AssistantResponse(
             id=db_assistant.id,
             assistant_id=db_assistant.assistant_id,
@@ -348,7 +359,7 @@ async def update_assistant(
             model=db_assistant.model,
             file_ids=json.loads(db_assistant.file_ids) if db_assistant.file_ids else [],
             tools={"file_search": False, "code_interpreter": True, "vector_store_ids": []},
-            conversation_count=0,  # Temporarily disabled
+            conversation_count=conversation_count,
             created_at=db_assistant.created_at.isoformat() if db_assistant.created_at else ""
         )
         

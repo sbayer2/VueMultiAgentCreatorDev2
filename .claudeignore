@@ -1,0 +1,55 @@
+# Claude Code ignore patterns
+# Exclude these from being read by Claude to save tokens
+
+# Dependencies and build artifacts
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+dist/
+build/
+
+# IDE and system files
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*.swo
+
+# Logs and temporary files
+*.log
+logs/
+temp_screenshots/
+
+# Git files
+.git/
+
+# Large static assets that don't need AI analysis
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.ico
+*.svg
+*.woff
+*.woff2
+*.ttf
+*.eot
+
+# Compiled JavaScript/CSS
+*.min.js
+*.min.css
+
+# Test coverage and reports
+coverage/
+.coverage
+htmlcov/
+
+# Documentation that's already referenced (don't duplicate load)
+docs/CLAUDE.md.backup
+
+# Lock files (reference package.json instead)
+package-lock.json
+poetry.lock
+Pipfile.lock

@@ -77,19 +77,23 @@ const fetchFileDetails = async () => {
   }
 };
 
-// Optimistic UI update for delete
+// Delete file - emit to parent to handle backend delete
+// No optimistic UI update - wait for parent to confirm success
 const deleteFile = (fileId: string) => {
-  console.log(`DEBUG: Deleting file ${fileId} from UI`);
-  
-  // Immediately remove from UI (optimistic update)
-  const previousFiles = [...files.value];
-  files.value = files.value.filter(f => f.file_id !== fileId);
-  console.log(`DEBUG: File removed from UI. Previous count: ${previousFiles.length}, New count: ${files.value.length}`);
-  
+  console.log(`DEBUG: Deleting file ${fileId}`);
+
   // Emit event to parent to handle backend delete
+  // Parent will call refreshFiles() on success
   console.log(`DEBUG: Emitting delete-file event for ${fileId}`);
   emit('delete-file', fileId);
 };
+
+// Expose refresh method for parent to call after successful deletion
+const refreshFiles = () => {
+  fetchFileDetails();
+};
+
+defineExpose({ refreshFiles });
 
 watch(() => props.assistant?.file_ids, fetchFileDetails, { deep: true, immediate: true });
 

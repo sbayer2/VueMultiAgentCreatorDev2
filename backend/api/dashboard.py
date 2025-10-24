@@ -18,8 +18,13 @@ async def get_dashboard_stats(db: Session = Depends(get_db), current_user: User 
     # Get total assistants from the legacy table
     total_assistants = db.query(UserAssistant).filter(UserAssistant.user_id == user_id).count()
 
+    # Count assistants with active threads (conversation_count > 0)
+    active_assistants = db.query(UserAssistant).filter(
+        UserAssistant.user_id == user_id,
+        UserAssistant.thread_id.isnot(None)
+    ).count()
+
     # Placeholder values for other stats
-    active_chats = 0  # This metric is deprecated as it relies on the Conversation model
     messages_today = 0
     api_usage = "N/A"
 
@@ -42,7 +47,7 @@ async def get_dashboard_stats(db: Session = Depends(get_db), current_user: User 
     return {
         "stats": {
             "totalAssistants": total_assistants,
-            "activeChats": active_chats,
+            "activeChats": active_assistants,  # Count of assistants with active threads
             "messagesToday": messages_today,
             "apiUsage": api_usage,
         },

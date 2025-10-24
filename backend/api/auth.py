@@ -130,7 +130,7 @@ async def register(register_data: RegisterRequest, db: Session = Depends(get_db)
             "user": {
                 "id": db_user.id,
                 "email": db_user.username,
-                "name": register_data.name
+                "name": db_user.username.split('@')[0]  # Use email prefix as name
             }
         }
     )
