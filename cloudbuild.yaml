@@ -29,28 +29,15 @@ steps:
       - 'managed'
       - '--allow-unauthenticated'
       - '--set-env-vars'
-      - 'DB_HOST=34.45.198.154,DB_USER=root,DB_NAME=vue_app,FRONTEND_URL=https://vue-multiagent-frontend-129438231958.us-central1.run.app'
+      - 'DB_USER=root,DB_NAME=multiagent_db,USE_CLOUD_SQL=true,FRONTEND_URL=https://vue-multiagent-frontend-887330536517.us-central1.run.app'
       - '--set-secrets'
-      - 'OPENAI_API_KEY=openai-api-key:latest,SECRET_KEY=jwt-secret-key:latest,DB_PASS=db-password:latest,SMTP_USER=SMTP_USER:latest,SMTP_PASSWORD=SMTP_PASSWORD:latest,FROM_EMAIL=FROM_EMAIL:latest'
+      - 'OPENAI_API_KEY=openai-api-key:latest,SECRET_KEY=jwt-secret-key:latest,DB_PASS=db-password:latest,SMTP_USER=SMTP_USER:latest,SMTP_PASSWORD=SMTP_PASSWORD:latest,FROM_EMAIL=FROM_EMAIL:latest,INSTANCE_CONNECTION_NAME=INSTANCE_CONNECTION_NAME:latest'
       - '--timeout'
       - '300'
       - '--memory'
       - '512Mi'
   
-  # Deploy frontend to Cloud Run
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: gcloud
-    args:
-      - 'run'
-      - 'deploy'
-      - 'vue-multiagent-frontend'
-      - '--image'
-      - 'gcr.io/$PROJECT_ID/vue-multiagent-frontend:latest'
-      - '--region'
-      - 'us-central1'
-      - '--platform'
-      - 'managed'
-      - '--allow-unauthenticated'
+
 
 images:
   - 'gcr.io/$PROJECT_ID/vue-multiagent-frontend:latest'

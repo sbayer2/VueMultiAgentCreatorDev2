@@ -79,3 +79,5 @@ share/python-wheels/
 
 # Docker
 .dockerignore
+.gemini/
+gha-creds-*.json

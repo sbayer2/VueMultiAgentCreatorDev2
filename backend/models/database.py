@@ -115,28 +115,54 @@ class ConversationMessage(Base):
     # Relationships
     conversation = relationship("Conversation", back_populates="messages")
 
-def get_database_url():
-    """Get database URL based on environment"""
-    # Always use TCP connection with provided host
-    import logging
-    logger = logging.getLogger(__name__)
-    db_url = f"mysql+pymysql://{settings.DB_USER}:{'*' * len(settings.DB_PASS) if settings.DB_PASS else 'NO_PASS'}@{settings.DB_HOST}:3306/{settings.DB_NAME}"
-    logger.info(f"Database URL (masked): {db_url}")
-    logger.info(f"DB_PASS length: {len(settings.DB_PASS) if settings.DB_PASS else 0}")
-    # Add charset for better compatibility
-    return f"mysql+pymysql://{settings.DB_USER}:{settings.DB_PASS}@{settings.DB_HOST}:3306/{settings.DB_NAME}?charset=utf8mb4"
+from google.cloud.sql.connector import Connector, IPTypes
+import logging
+
+logger = logging.getLogger(__name__)
+
+def get_conn() -> pymysql.connections.Connection:
+    """Initializes a connection based on the environment."""
+    if settings.USE_CLOUD_SQL:
+        logger.info("Connecting to Cloud SQL...")
+        try:
+            ip_type = IPTypes.PRIVATE if settings.DB_HOST and settings.DB_HOST.startswith("10.") else IPTypes.PUBLIC
+            with Connector() as connector:
+                return connector.connect(
+                    settings.INSTANCE_CONNECTION_NAME,
+                    "pymysql",
+                    user=settings.DB_USER,
+                    password=settings.DB_PASS,
+                    db=settings.DB_NAME,
+                    ip_type=ip_type,
+                    connect_timeout=30,
+                )
+        except Exception as e:
+            logger.error(f"Failed to connect to Cloud SQL: {e}")
+            raise
+    else:
+        logger.info("Connecting to local database...")
+        try:
+            return pymysql.connect(
+                host=settings.DB_HOST,
+                user=settings.DB_USER,
+                password=settings.DB_PASS,
+                database=settings.DB_NAME,
+                connect_timeout=10,
+                charset='utf8mb4'
+            )
+        except pymysql.MySQLError as e:
+            logger.error(f"Failed to connect to local database: {e}")
+            raise
 
 # Create engine with connection pool settings for Cloud Run
 engine = create_engine(
-    get_database_url(), 
+    "mysql+pymysql://",
+    creator=get_conn,
     pool_pre_ping=True,
     pool_size=5,
     max_overflow=10,
     pool_timeout=30,
     pool_recycle=1800,
-    connect_args={
-        "connect_timeout": 10
-    }
 )
 
 # Create session factory

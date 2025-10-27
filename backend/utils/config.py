@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     # Google Cloud
     GOOGLE_CLOUD_PROJECT: Optional[str] = None
     GOOGLE_CLOUD_BUCKET: Optional[str] = None
+    USE_CLOUD_SQL: bool = False
     
     class Config:
         env_file = ".env"
