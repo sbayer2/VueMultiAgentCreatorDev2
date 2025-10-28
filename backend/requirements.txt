@@ -16,4 +16,4 @@ pydantic==2.5.3
 pydantic-settings==2.1.0
 httpx==0.26.0
 Pillow==10.2.0
-google-cloud-sql-connector==1.5.1
+cloud-sql-python-connector==1.18.5
