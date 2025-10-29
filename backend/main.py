@@ -47,10 +47,20 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Configure CORS
+# Configure CORS - Allow both Cloud Run URL formats
+allowed_origins = [settings.FRONTEND_URL]
+
+# Also allow the project-number-based URL format (both are the same service)
+if "d6mqo7ynsq-uc.a.run.app" in settings.FRONTEND_URL:
+    # Add the new URL format
+    allowed_origins.append("https://vue-multiagent-frontend-887330536517.us-central1.run.app")
+elif "887330536517.us-central1.run.app" in settings.FRONTEND_URL:
+    # Add the legacy URL format
+    allowed_origins.append("https://vue-multiagent-frontend-d6mqo7ynsq-uc.a.run.app")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
